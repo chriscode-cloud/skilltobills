@@ -1,0 +1,8 @@
+{
+  "name": "Skill2Bills",
+  "description": "Learn modern online side hustles including Twitch streaming, viral content creation, AI influencers & Fanvue, and digital revenue models.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

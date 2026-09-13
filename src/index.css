@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-brand-chartreuse: #D4F636;
+  --color-brand-black: #000000;
+  --color-brand-lime: #D4F79E;
+  --color-brand-lilac: #EADFF5;
+  --color-brand-peach: #FAECE1;
+  --color-brand-green: #00B050;
+  --color-brand-bg-light: #F7F7F5;
+}
+
+/* Custom smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+}
+
+/* Custom arch cutout styles for the pathways cards */
+.arch-mask {
+  border-top-left-radius: 9999px;
+  border-top-right-radius: 9999px;
+  border-bottom-left-radius: 1.5rem;
+  border-bottom-right-radius: 1.5rem;
+}
+
+/* Rounded organic shape like in screenshot 2 & 5 */
+.organic-badge {
+  border-radius: 40px 100px 40px 100px;
+}
+
+@keyframes floatCard {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float-card {
+  animation: floatCard 4.5s ease-in-out infinite;
+}
+
+@keyframes telecastMarquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-telecast {
+  display: flex;
+  width: max-content;
+  animation: telecastMarquee 32s linear infinite;
+}
+
+.animate-telecast:hover {
+  animation-play-state: paused;
+}
+
