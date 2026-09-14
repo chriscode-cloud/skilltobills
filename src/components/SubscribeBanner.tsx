@@ -34,7 +34,7 @@ export const SubscribeBanner: React.FC = () => {
             Subscribe to Skill2Bills Updates
           </h3>
           <p className="text-slate-300 text-sm sm:text-base font-normal max-w-xl">
-            We bring together industry leaders to share insights, spark ideas, and help you level up.
+            Hands-on breakdowns on AI content creation, digital tools, and emerging trends to help you build and monetize.
           </p>
         </div>
 
@@ -46,7 +46,7 @@ export const SubscribeBanner: React.FC = () => {
               <span>You&apos;re on the insider list!</span>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div>
               <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-center gap-2">
                 <input
                   type="email"
@@ -63,9 +63,6 @@ export const SubscribeBanner: React.FC = () => {
                   Subscribe
                 </button>
               </form>
-              <p className="text-[11px] text-slate-400 text-center sm:text-left px-2">
-                Free. Unsubscribe anytime. We never sell your data.
-              </p>
             </div>
           )}
         </div>

@@ -147,7 +147,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBackToHome, initialSelecte
         <main className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-16 mt-12 animate-in fade-in duration-300">
           <div className="text-center mb-16 max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-950 tracking-tight leading-[1.05]">
-              The Creator Blueprint
+              The Latest
             </h1>
           </div>
 
@@ -163,7 +163,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBackToHome, initialSelecte
                     setSelectedArticle(article);
                   }
                 }}
-                className="bg-white rounded-3xl overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 border border-slate-200/80 cursor-pointer group flex flex-col justify-between pb-6"
+                className="bg-white rounded-3xl overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 border border-slate-200/80 cursor-pointer group flex flex-col justify-between"
               >
                 <div>
                   <div className="aspect-[16/10] overflow-hidden bg-slate-100 relative">
@@ -172,9 +172,6 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBackToHome, initialSelecte
                       alt={article.title}
                       className="w-full h-full object-cover object-center group-hover:scale-103 transition-transform duration-500"
                     />
-                    <div className="absolute top-4 left-4 bg-black/75 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-xs">
-                      {article.category}
-                    </div>
                   </div>
 
                   <div className="p-6 sm:p-7 space-y-3">
@@ -184,18 +181,6 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBackToHome, initialSelecte
                     <p className="text-slate-600 text-xs sm:text-sm leading-relaxed line-clamp-3">
                       {article.summary}
                     </p>
-                  </div>
-                </div>
-
-                <div className="px-6 pt-2 flex items-center gap-3 border-t border-slate-100 mt-2">
-                  <img
-                    src={article.author.avatar}
-                    alt={article.author.name}
-                    className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                  />
-                  <div className="text-xs">
-                    <div className="font-bold text-slate-900">{article.author.name}</div>
-                    <div className="text-slate-500 text-[11px]">{article.author.role}</div>
                   </div>
                 </div>
               </article>

@@ -153,7 +153,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onSelectTrack, onExploreClick, o
             onClick={() => onSelectTrack(COURSE_TRACKS[0])}
             className="hover:text-[#D4F636] transition-colors cursor-pointer font-medium text-white"
           >
-            AI &amp; Fanvue
+            AI Influencer
           </button>
 
           <button

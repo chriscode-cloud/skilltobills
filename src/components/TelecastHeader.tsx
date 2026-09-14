@@ -7,7 +7,6 @@ interface TelecastHeaderProps {
 export const TelecastHeader: React.FC<TelecastHeaderProps> = ({ onExploreClick }) => {
   const tickerPhrases = [
     "Make Extra Income: Discover the highest-paying online side hustles proven for 2026",
-    "Find Your Side Hustle: Over 42,000 creators building scalable digital cash flow",
     "Trending Now: AI Influencers on Fanvue, Twitch live streaming and TikTok UGC brand deals",
     "Start Today: Turn 2 hours of spare evening time into real digital income",
     "Zero Prior Capital Needed: Step-by-step roadmaps designed for busy students and beginners"

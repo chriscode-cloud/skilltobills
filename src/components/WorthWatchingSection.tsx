@@ -4,7 +4,7 @@ export const WorthWatchingSection: React.FC = () => {
   return (
     <section
       id="worth-watching"
-      className="bg-[#0f1117] text-white py-16 sm:py-20 px-4 sm:px-8 lg:px-16 border-b border-white/10 relative"
+      className="bg-[#000000] text-white py-16 sm:py-20 px-4 sm:px-8 lg:px-16 border-b border-white/10 relative"
     >
       <div className="max-w-5xl mx-auto">
         {/* Section Heading & Subtext */}

@@ -49,10 +49,10 @@ export const COURSE_TRACKS: CourseTrack[] = [
   {
     id: "ai-influencer",
     title: "AI & Virtual Influencers",
-    category: "Fanvue & Digital Models",
-    tagline: "Build 5-figure faceless revenue streams with hyper-realistic AI avatars",
+    category: "Faceless Creators & Digital Personas",
+    tagline: "Build a consistent virtual character from scratch — no experience needed.",
     description:
-      "Design hyper-realistic AI personas, build loyal Fanvue & Instagram subscriber bases, and automate 5-figure monthly sponsorships without ever showing your face.",
+      "Start with zero design or AI experience and walk through the exact process of building a virtual creator: character identity, visual consistency across posts, a content calendar, and how to actually pitch that character to a brand. You'll work with the same tools real virtual creator agencies use in 2026 — and you'll understand why each step matters, not just which buttons to click.",
     bgColor: "bg-[#D4F79E]",
     bgHex: "#D4F79E",
     badge: "Trending 2026",
@@ -76,7 +76,7 @@ export const COURSE_TRACKS: CourseTrack[] = [
     category: "Short-Form & UGC",
     tagline: "Turn 15-second smartphone edits into brand deals & algorithmic dominance",
     description:
-      "Get hired as a professional creator or start earning independently with a portfolio that shows what you can do across TikTok, YouTube Shorts, and UGC brand contracts.",
+      "Build a portfolio that shows what you can actually do across TikTok, YouTube Shorts, and UGC brand work hooks, pacing, and editing skills proven through real submissions.",
     bgColor: "bg-[#EADFF5]",
     bgHex: "#EADFF5",
     badge: "High Demand",
@@ -100,7 +100,7 @@ export const COURSE_TRACKS: CourseTrack[] = [
     category: "Twitch, Kick & YouTube",
     tagline: "Monetize your passion with loyal viewer bases and high-margin affiliate streams",
     description:
-      "Launch your stream career, start a community, or build income streams that don't depend on anyone else deciding you're ready on Twitch, Kick, and YouTube Live.",
+      "Learn to launch a stream, build a small but real community, and learn the retention techniques that matter more than expensive gear.",
     bgColor: "bg-[#FAECE1]",
     bgHex: "#FAECE1",
     badge: "Community Favorite",

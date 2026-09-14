@@ -11,14 +11,14 @@ export const LatestSection: React.FC<LatestSectionProps> = ({ onSelectArticle, o
   return (
     <section
       id="the-latest"
-      className="bg-[#F7F7F5] pb-24 sm:pb-32 px-4 sm:px-8 lg:px-16"
+      className="bg-[#F7F7F5] pt-20 sm:pt-28 pb-24 sm:pb-32 px-4 sm:px-8 lg:px-16"
     >
       <div className="max-w-7xl mx-auto">
         {/* Header Row */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 sm:mb-14 gap-4">
           <div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-950">
-              The Creator Blueprint
+              The Latest
             </h2>
           </div>
 
@@ -49,9 +49,6 @@ export const LatestSection: React.FC<LatestSectionProps> = ({ onSelectArticle, o
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
                   />
-                  <div className="absolute top-4 left-4 bg-black/75 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-xs">
-                    {article.category}
-                  </div>
                 </div>
 
                 {/* Card Content */}
@@ -65,19 +62,6 @@ export const LatestSection: React.FC<LatestSectionProps> = ({ onSelectArticle, o
                   <p className="text-slate-600 text-xs sm:text-sm leading-relaxed line-clamp-3 mb-4">
                     {article.summary}
                   </p>
-                </div>
-              </div>
-
-              {/* Card Footer: Author info */}
-              <div className="px-6 pb-6 pt-2 border-t border-slate-100 flex items-center gap-3">
-                <img
-                  src={article.author.avatar}
-                  alt={article.author.name}
-                  className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                />
-                <div className="text-xs">
-                  <div className="font-bold text-slate-900">{article.author.name}</div>
-                  <div className="text-slate-500 text-[11px]">{article.author.role}</div>
                 </div>
               </div>
             </article>

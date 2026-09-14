@@ -119,7 +119,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
                   onClick={onBlogClick}
                   className="hover:text-[#D4F636] transition-colors cursor-pointer text-left font-normal"
                 >
-                  The Creator Blueprint (Blog)
+                  The Latest (Blog)
                 </button>
               </li>
               <li>
