@@ -54,7 +54,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
                   onClick={() => onSelectTrackById("content-creation")}
                   className="hover:text-[#D4F636] transition-colors cursor-pointer text-left"
                 >
-                  Viral Content &amp; UGC
+                  Content Clipping
                 </button>
               </li>
               <li>

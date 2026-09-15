@@ -35,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onSelectTrack, onExploreClick, o
     },
     {
       id: "content-creation",
-      label: "Viral Content & Short-Form UGC",
+      label: "Content Clipping",
       track: COURSE_TRACKS[1],
     },
     {
@@ -161,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onSelectTrack, onExploreClick, o
             onClick={() => onSelectTrack(COURSE_TRACKS[1])}
             className="hover:text-[#D4F636] transition-colors cursor-pointer font-medium text-white"
           >
-            Viral UGC
+            Content Clipping
           </button>
 
           <button

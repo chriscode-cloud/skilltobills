@@ -68,15 +68,21 @@ export const COURSE_TRACKS: CourseTrack[] = [
       "Brand Sponsorship Pitching for Virtual Ambassadors",
       "Legal Compliance & AI Disclosures for Maximum Longevity"
     ],
-    keyTools: ["Fanvue", "Midjourney v6", "ComfyUI", "Magnific AI", "ManyChat"]
+    keyTools: [
+      "Higgsfield AI Influencer Studio",
+      "Midjourney",
+      "Kling AI / HeyGen Avatar IV",
+      "Canva",
+      "ComfyUI"
+    ]
   },
   {
     id: "content-creation",
-    title: "Viral Content & Short-Form UGC",
+    title: "Content Clipping",
     category: "Short-Form & UGC",
-    tagline: "Turn 15-second smartphone edits into brand deals & algorithmic dominance",
+    tagline: "Turn someone else's long-form content into short clips that actually get watched.",
     description:
-      "Build a portfolio that shows what you can actually do across TikTok, YouTube Shorts, and UGC brand work hooks, pacing, and editing skills proven through real submissions.",
+      "Learn the real workflow behind content clipping finding the right source material, using AI tools to identify and cut the strongest moments, captioning and formatting for each platform, and understanding the legal and platform rules that separate a legitimate clipping operation from copyright trouble.",
     bgColor: "bg-[#EADFF5]",
     bgHex: "#EADFF5",
     badge: "High Demand",
@@ -86,21 +92,31 @@ export const COURSE_TRACKS: CourseTrack[] = [
     difficulty: "All Levels",
     studentsCount: "22,410 enrolled",
     curriculum: [
-      "Psychology of the 3-Second Hook & Retention Curve",
-      "CapCut Pro & Premiere Viral Pacing Workflows",
-      "Landing $1,500/video UGC Contracts with Global Brands",
-      "YouTube Automation & Faceless Channel Scaling",
-      "TikTok Creator Rewards Program & RPM Optimization"
+      "Understanding the Clipping Ecosystem",
+      "Content Rights & What You're Allowed to Clip",
+      "Finding the Moment: What Makes a Clip Worth Cutting",
+      "AI-Assisted Clipping Workflow",
+      "Manual Editing Fundamentals (CapCut)",
+      "Platform-Specific Formatting",
+      "Building a Clip Portfolio & Sample Reel",
+      "Understanding Campaigns & Realistic Expectations"
     ],
-    keyTools: ["CapCut", "TikTok Shop", "Notion Creator Hub", "ElevenLabs", "Epidemic Sound"]
+    keyTools: [
+      "CapCut",
+      "Opus Clip",
+      "Vizard",
+      "Klap",
+      "Submagic",
+      "Platform-provided tools"
+    ]
   },
   {
     id: "live-streaming",
     title: "Live Streaming & Gaming",
     category: "Twitch, Kick & YouTube",
-    tagline: "Monetize your passion with loyal viewer bases and high-margin affiliate streams",
+    tagline: "Build a stream and a community that holds up on its own, starting from zero.",
     description:
-      "Learn to launch a stream, build a small but real community, and learn the retention techniques that matter more than expensive gear.",
+      "Learn to choose the right platform, set up your broadcast properly, go live for the first time, and build real (if small) viewer engagement, the retention techniques that matter more than expensive gear.",
     bgColor: "bg-[#FAECE1]",
     bgHex: "#FAECE1",
     badge: "Community Favorite",
@@ -110,13 +126,27 @@ export const COURSE_TRACKS: CourseTrack[] = [
     difficulty: "Beginner Friendly",
     studentsCount: "18,950 enrolled",
     curriculum: [
-      "OBS Studio Setup, Audio Compression & Dynamic Overlays",
-      "Speedrunning to Twitch Affiliate & Kick Creator Program",
-      "Engaging Dead Chats: Viewer Retention Techniques",
-      "Securing Energy Drink, Tech & VPN Sponsorship Contracts",
-      "Merchandising & Multi-Platform VOD Repurposing"
+      "Choosing Your Platform",
+      "Platform Setup From Zero",
+      "Platform Requirements & Compliance",
+      "Genuine Viewer Engagement (Including at Zero Viewers)",
+      "Discord & Community Infrastructure",
+      "Clipping Your Own Content for Discovery",
+      "Multi-Platform Repurposing",
+      "Building a Media Kit & Approaching Sponsors",
+      "FTC Compliance & Disclosure",
+      "Optional Path: Clipping for Other Creators"
     ],
-    keyTools: ["OBS Studio", "Streamlabs", "Discord", "Kick Studio", "Voicemod"]
+    keyTools: [
+      "OBS Studio",
+      "Twitch Studio",
+      "Streamlabs",
+      "StreamElements",
+      "Discord",
+      "Eklipse",
+      "Postiz",
+      "Voicemod"
+    ]
   },
   {
     id: "youtube-automation",
