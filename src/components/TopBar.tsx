@@ -58,9 +58,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
                 <span>All Community Hubs</span>
               </button>
 
-              {/* Section label: EXPLORE BY CATEGORY */}
-              <div className="px-6 pt-5 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                EXPLORE BY CATEGORY
+              {/* Section label */}
+              <div className="px-6 pt-5 pb-2 text-xs font-semibold text-slate-500">
+                Explore by Category
               </div>
 
               <div className="pb-3">
@@ -116,6 +116,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
         >
           Blog
         </button>
+
+        <a
+          href="#academy"
+          className="hover:text-[#D4F636] text-[#D4F636] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+          title="Student Academy & LMS"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-[#D4F636] animate-pulse"></span>
+          <span>Academy</span>
+        </a>
 
         <a
           href="#footer"

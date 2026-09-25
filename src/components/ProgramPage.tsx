@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { CourseTrack } from "../data/contentData";
-import { Play, Pause, Sparkles, Wrench, ChevronDown, ChevronUp } from "lucide-react";
+import { Play, Pause, Wrench, ChevronDown, ChevronUp } from "lucide-react";
 
 interface ProgramPageProps {
   track: CourseTrack;
@@ -139,7 +139,7 @@ export const ProgramPage: React.FC<ProgramPageProps> = ({ track, onBack, onEnrol
       {/* 1. Header Banner/Hero */}
       <div 
         className={`border-b border-black/5 py-12 sm:py-20 lg:py-24 px-4 sm:px-8 lg:px-16 relative overflow-hidden ${
-          track.id === "content-creation"
+          track.id === "content-creation" || track.id === "live-streaming"
             ? ""
             : track.bgColor
         }`}
@@ -147,30 +147,39 @@ export const ProgramPage: React.FC<ProgramPageProps> = ({ track, onBack, onEnrol
           backgroundImage: 'url("https://i.pinimg.com/originals/31/d7/5a/31d75a6a1c386d188f696275aa585ac3.jpg")',
           backgroundSize: 'cover',
           backgroundPosition: 'center'
+        } : track.id === "live-streaming" ? {
+          backgroundImage: 'url("https://i.pinimg.com/originals/c8/ce/36/c8ce3693b0e4fd83a4c3229ea175dd25.jpg")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
         } : undefined}
       >
         {/* Soft high-contrast overlay for Content Clipping background image */}
         {track.id === "content-creation" && (
-          <div className="absolute inset-0 bg-gradient-to-b lg:bg-gradient-to-r from-[#0c0a09]/85 via-[#0c0a09]/45 to-[#0c0a09]/15 backdrop-blur-[1px] z-0" />
+          <div className="absolute inset-0 bg-gradient-to-b lg:bg-gradient-to-r from-[#0c0a09]/95 via-[#0c0a09]/80 to-[#0c0a09]/40 backdrop-blur-[1.5px] z-0" />
+        )}
+
+        {/* Soft high-contrast overlay for Live Streaming background image */}
+        {track.id === "live-streaming" && (
+          <div className="absolute inset-0 bg-gradient-to-b lg:bg-gradient-to-r from-[#0c0a09]/95 via-[#0c0a09]/80 to-[#0c0a09]/40 backdrop-blur-[1.5px] z-0" />
         )}
 
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
             <div className="max-w-3xl text-center lg:text-left flex flex-col items-center lg:items-start w-full">
               <h1 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-4 ${
-                track.id === "content-creation" ? "text-white" : "text-slate-950"
+                track.id === "content-creation" || track.id === "live-streaming" ? "text-white" : "text-slate-950"
               }`}>
                 {track.title}
               </h1>
 
-              <p className={`text-base sm:text-xl font-bold max-w-2xl mb-4 mx-auto lg:mx-0 ${
-                track.id === "content-creation" ? "text-slate-200" : "text-slate-900"
+              <p className={`text-base sm:text-xl font-bold max-w-2xl mb-4 ${
+                track.id === "content-creation" || track.id === "live-streaming" ? "text-slate-200" : "text-slate-900"
               }`}>
                 {isAiInfluencer ? "Build a consistent virtual character from scratch no experience needed." : track.tagline}
               </p>
 
-              <p className={`text-sm sm:text-base leading-relaxed font-normal max-w-2xl mx-auto lg:mx-0 ${
-                track.id === "content-creation" ? "text-slate-300" : "text-slate-700"
+              <p className={`text-sm sm:text-base leading-relaxed font-normal max-w-2xl ${
+                track.id === "content-creation" || track.id === "live-streaming" ? "text-slate-300" : "text-slate-700"
               }`}>
                 {isAiInfluencer 
                   ? "Start with zero design or AI experience and walk through the exact process of building a virtual creator: character identity, visual consistency across posts, a content calendar, and how to actually pitch that character to a brand."

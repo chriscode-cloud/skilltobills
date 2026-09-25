@@ -177,47 +177,47 @@ export const COURSE_TRACKS: CourseTrack[] = [
 export const BLOG_ARTICLES: BlogArticle[] = [
   {
     id: "twitch-affiliate-blueprint",
-    category: "TWITCH & KICK, STREAMING INCOME, SPONSORSHIPS",
-    title: "How Beginners Are Hitting Twitch Affiliate and Signing $2k Brand Deals in 30 Days",
-    readTime: "5 min read",
-    date: "May 24, 2026",
-    image: "https://images.unsplash.com/photo-1598550476439-6847785fdd52?q=80&w=800&auto=format&fit=crop",
+    category: "CREATOR ECONOMY, DIGITAL SKILLS, EDUCATION",
+    title: "The $5.1 Billion Boom: Why African Youth Are Trading Classrooms for Digital Content Skills",
+    readTime: "6 min read",
+    date: "September 14, 2026",
+    image: "https://i.pinimg.com/originals/20/19/dc/2019dc2d4a0cc32e7c3ab9cdb2ceeb68.jpg",
     summary:
-      "Breaking down the exact raid schedules, Discord funnel strategies, and warm-outreach email templates our members used to secure their first paid hardware partnerships.",
+      "If you visit any university campus or tech hub across Ghana, Nigeria, or Kenya, you will notice a massive shift in what the next generation is focused on. Young people are no longer waiting around for traditional corporate jobs that do not exist. Instead, they are looking at their smartphones as economic lifelines.",
     author: {
       name: "Tariq Vance",
       avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200&auto=format&fit=crop",
-      role: "Partnered Twitch Creator"
+      role: "Digital Workflows Researcher"
     }
   },
   {
     id: "anatomy-of-ai-influencer",
-    category: "FANVUE & AI PERSONAS, PROMPT PACKS, CASE STUDIES",
-    title: "The Step-by-Step Anatomy of a $10,000/Month Faceless AI Influencer on Fanvue",
-    readTime: "7 min read",
-    date: "June 02, 2026",
-    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop",
+    category: "SOLO AGENCIES, CONTENT CLIPPING, AUTOMATION",
+    title: "The Rise of the Solo Agency: Why Brands Are Dumping Marketing Firms for Content Clippers",
+    readTime: "5 min read",
+    date: "September 14, 2026",
+    image: "https://i.pinimg.com/originals/13/f2/af/13f2af4a926c7b972a01e57cc1e2c587.jpg",
     summary:
-      "From LoRA training and lighting prompts in Midjourney to high-converting subscriber tiers and automated DM messaging on Fanvue.",
+      "Traditional, over produced corporate videos are being heavily ignored by modern audiences. Instead, attention has shifted entirely to high retention, fast paced, vertical short form clips like TikToks, Reels, and YouTube Shorts.",
     author: {
       name: "Elena Rostova",
       avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop",
-      role: "AI Agency Director"
+      role: "Solo Agency Founder"
     }
   },
   {
     id: "ai-video-tools-algorithm",
-    category: "TIKTOK CREATOR REWARDS, VIRAL SHORT-FORM, AUTOMATION",
-    title: "AI Tools for Viral Video Creation: What Matters for 2026 Algorithms?",
+    category: "AI PERSONAS, DIGITAL BRANDING, MONETIZATION",
+    title: "The Virtual Gold Rush: How Solo Creators Are Building and Monetizing AI Influencers",
     readTime: "6 min read",
-    date: "June 08, 2026",
-    image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop",
+    date: "September 14, 2026",
+    image: "https://i.pinimg.com/originals/01/8a/d2/018ad2bb5aaf4293da365594e7a1a73d.jpg",
     summary:
-      "Why pacing, sound design, and automated b-roll generators are outperforming traditional high-budget production setups on TikTok and Reels.",
+      "A massive shift is happening on platforms like Instagram and TikTok, and some of the fastest growing creators online are not even human. They are AI Influencers: hyper realistic digital personas built completely from scratch using artificial intelligence.",
     author: {
-      name: "Devon Chen",
-      avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?q=80&w=200&auto=format&fit=crop",
-      role: "Short-Form Growth Hacker"
+      name: "Elena Rostova",
+      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop",
+      role: "Virtual Persona Architect"
     }
   }
 ];

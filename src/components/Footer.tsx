@@ -29,7 +29,14 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
               </span>
             </a>
             <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm">
-              Practical education for the 2026 creator economy. Learn what actually pays.
+              <a
+                href="#admin"
+                className="hover:text-slate-300 transition-colors cursor-pointer"
+                title="Admin"
+              >
+                Practical
+              </a>{" "}
+              education for the 2026 creator economy. Learn what actually pays.
             </p>
           </div>
 
@@ -84,6 +91,12 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
               Community &amp; Students
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm text-slate-300">
+              <li>
+                <a href="#academy" className="hover:text-[#D4F636] transition-colors flex items-center gap-1.5 font-bold text-white">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#D4F636]"></span>
+                  <span>Student Academy (LMS)</span>
+                </a>
+              </li>
               <li>
                 <a href="#transformation" className="hover:text-[#D4F636] transition-colors">
                   Learner Portfolios

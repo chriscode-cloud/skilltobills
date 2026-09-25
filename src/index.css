@@ -12,9 +12,9 @@
 }
 
 /* Custom smooth scrolling */
-html {
+html, body {
   scroll-behavior: smooth;
-  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+  font-family: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Custom arch cutout styles for the pathways cards */
