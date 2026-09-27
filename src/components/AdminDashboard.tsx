@@ -30,7 +30,7 @@ import {
   X
 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
-import { getAllProfiles, SupabaseProfile, isSupabaseConfigured } from "../lib/supabase";
+import { getAllProfiles, SupabaseProfile, isSupabaseConfigured } from "../lib/superbase/supabase";
 import { COURSE_TRACKS } from "../data/contentData";
 
 interface AdminDashboardProps {

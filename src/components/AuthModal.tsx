@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { CheckCircle2, ArrowRight, ArrowLeft, Clock, AlertTriangle } from "lucide-react";
-import { supabase, saveOnboardingData } from "../lib/supabase";
+import { supabase, saveOnboardingData } from "../lib/superbase/supabase";
 import { ImageSlider } from "@/components/ui/image-slider";
 import { BrandLogo } from "./BrandLogo";
 
