@@ -5,7 +5,7 @@ import { CourseClassroom } from "./CourseClassroom";
 import { CourseResources } from "./CourseResources";
 import { LMS_COURSES } from "./lmsData";
 import { Course, UserProgressState } from "./types";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../lib/superbase/supabase";
 
 interface LmsAppProps {
   onExitToWebsite: () => void;
