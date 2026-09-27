@@ -1,6 +1,4 @@
-// src/lib/courses.ts
-// Read access to courses/modules/lessons (all public per RLS),
-// plus per-user progress tracking against user_progress.
+
 
 import { supabase } from "./client";
 
