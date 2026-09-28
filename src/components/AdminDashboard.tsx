@@ -30,7 +30,15 @@ import {
   X
 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
-import { getAllProfiles, SupabaseProfile, isSupabaseConfigured } from "../lib/superbase/supabase";
+import {
+  getAllProfiles,
+  SupabaseProfile,
+  isSupabaseConfigured,
+  supabaseUrl,
+  supabaseAnonKey,
+  setCustomSupabaseCredentials,
+  clearCustomSupabaseCredentials,
+} from "../lib/supabase";
 import { COURSE_TRACKS } from "../data/contentData";
 
 interface AdminDashboardProps {
@@ -43,6 +51,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTrackFilter, setSelectedTrackFilter] = useState("all");
   const [timeRange, setTimeRange] = useState<"1D" | "1W" | "1M" | "3M" | "6M" | "1Y">("6M");
+  const [inputUrl, setInputUrl] = useState(supabaseUrl || "");
+  const [inputKey, setInputKey] = useState(supabaseAnonKey || "");
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [testMessage, setTestMessage] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "leads" | "tracks" | "settings">("overview");
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
@@ -187,6 +199,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
       time_commitment: newTime,
       experience_level: newExp,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     try {
@@ -1022,10 +1035,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                 <div className="space-y-4">
                   <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-2xs">
                     <div>
-                      <div className="text-xs font-bold text-slate-900">Supabase Connection</div>
+                      <div className="text-xs font-bold text-slate-900">Supabase Connection Status</div>
                       <div className="text-[11px] text-slate-500 mt-0.5">
                         {isSupabaseConfigured
-                          ? "Connected via VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY"
+                          ? `Endpoint: ${supabaseUrl || "Configured"}`
                           : "Running in local storage fallback mode (offline-safe)"}
                       </div>
                     </div>
@@ -1039,6 +1052,130 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                       {isSupabaseConfigured ? "Active Cloud" : "Local Mode"}
                     </span>
                   </div>
+
+                  {/* Supabase Configuration Form (Gated strictly to Local Dev Mode) */}
+                  {import.meta.env.DEV && (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-slate-900">Supabase Project Settings</h3>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">DEV ONLY</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Configure project URL and anon key during development.
+                          </p>
+                        </div>
+                        <a
+                          href="https://supabase.com/dashboard"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          Supabase Dashboard
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Project URL or Project ID
+                          </label>
+                          <input
+                            type="text"
+                            value={inputUrl}
+                            onChange={(e) => setInputUrl(e.target.value)}
+                            placeholder="e.g. https://your-project.supabase.co or your-project-id"
+                            className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-900 outline-none transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Anon / Publishable API Key
+                          </label>
+                          <input
+                            type="password"
+                            value={inputKey}
+                            onChange={(e) => setInputKey(e.target.value)}
+                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                            className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-900 outline-none transition-all"
+                          />
+                        </div>
+
+                        {testMessage && (
+                          <div
+                            className={`p-3 rounded-xl text-xs font-medium border ${
+                              testStatus === "success"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-red-50 text-red-800 border-red-200"
+                            }`}
+                          >
+                            {testMessage}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={!inputUrl.trim() || testStatus === "testing"}
+                            onClick={async () => {
+                              setTestStatus("testing");
+                              setTestMessage("");
+                              let testTarget = inputUrl.trim();
+                              if (/^[a-z0-9_-]+$/i.test(testTarget) && !testTarget.includes(".")) {
+                                testTarget = `https://${testTarget}.supabase.co`;
+                              } else if (!/^https?:\/\//i.test(testTarget)) {
+                                testTarget = `https://${testTarget.replace(/^\/+/, "")}`;
+                              }
+                              try {
+                                const res = await fetch(`${testTarget}/auth/v1/health`);
+                                if (res.ok || res.status < 500) {
+                                  setTestStatus("success");
+                                  setTestMessage("Domain is live! Supabase Auth service responded successfully.");
+                                } else {
+                                  setTestStatus("error");
+                                  setTestMessage(`Supabase returned HTTP ${res.status}. Check your project settings.`);
+                                }
+                              } catch (err: any) {
+                                setTestStatus("error");
+                                setTestMessage(
+                                  `Server IP address could not be found (${err?.message || "ENOTFOUND"}). Make sure this project is unpaused or active in your Supabase dashboard.`
+                                );
+                              }
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {testStatus === "testing" ? "Testing DNS & Ping..." : "Test Connection"}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={!inputUrl.trim() || !inputKey.trim()}
+                            onClick={() => {
+                              setCustomSupabaseCredentials(inputUrl, inputKey);
+                            }}
+                            className="px-4 py-2 rounded-xl text-xs font-bold bg-[#D4F636] hover:bg-[#c2e42b] text-black transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
+                          >
+                            Save Credentials &amp; Reload
+                          </button>
+
+                          {Boolean(localStorage.getItem("skill2bills_supabase_url")) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                clearCustomSupabaseCredentials();
+                              }}
+                              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
                     <div className="text-xs font-bold text-slate-900 mb-2">Expected Supabase Schema</div>

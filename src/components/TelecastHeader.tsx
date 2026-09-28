@@ -15,7 +15,7 @@ export const TelecastHeader: React.FC<TelecastHeaderProps> = ({ onExploreClick }
   return (
     <aside
       aria-label="Announcement Ticker"
-      className="bg-[#D4F636] text-black border-b border-black/10 text-xs sm:text-sm overflow-hidden relative z-50 flex items-center h-9 sm:h-10 shadow-xs"
+      className="bg-[#D4F636] text-black border-b border-black/10 text-xs sm:text-sm overflow-hidden relative z-10 flex items-center h-9 sm:h-10 shadow-xs"
     >
       {/* Ticker Tape Scroller - Full width, clean flowing text without buttons */}
       <div

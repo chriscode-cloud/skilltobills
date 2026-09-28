@@ -2,14 +2,29 @@ import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Menu, X, ArrowUpRight } from "lucide-react";
 import { COURSE_TRACKS, CourseTrack } from "../data/contentData";
 import { BrandLogo } from "./BrandLogo";
+import { AuthUser } from "../lib/auth";
 
 interface NavbarProps {
-  onSelectTrack: (track: CourseTrack) => void;
-  onExploreClick: () => void;
+  onSelectTrack: (track: CourseTrack | string) => void;
+  onExploreClick?: () => void;
   onHomeClick?: () => void;
+  currentUser?: AuthUser | null;
+  onLoginClick?: () => void;
+  onSignUpClick?: () => void;
+  onLogout?: () => void;
+  onBlogClick?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onSelectTrack, onExploreClick, onHomeClick }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  onSelectTrack,
+  onExploreClick,
+  onHomeClick,
+  currentUser,
+  onLoginClick,
+  onSignUpClick,
+  onLogout,
+  onBlogClick,
+}) => {
   const [programmesOpen, setProgrammesOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileProgrammesOpen, setMobileProgrammesOpen] = useState(false);

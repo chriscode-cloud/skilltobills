@@ -16,7 +16,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
 
       <div className="relative z-10 max-w-7xl mx-auto">
         {/* Navigation Columns */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 lg:gap-10 mb-16">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 lg:gap-10 mb-16">
           {/* Logo & Tagline Column */}
           <div className="col-span-2 space-y-4">
             <a
@@ -40,87 +40,33 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
             </p>
           </div>
 
-          {/* Column 1: Programmes */}
-          <div>
-            <h4 className="text-white font-bold text-sm sm:text-base mb-4 tracking-tight">
-              Programmes
-            </h4>
-            <ul className="space-y-2.5 text-xs sm:text-sm text-slate-300">
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onSelectTrackById("ai-influencer")}
-                  className="hover:text-[#D4F636] transition-colors cursor-pointer text-left"
-                >
-                  AI &amp; Virtual Influencers
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onSelectTrackById("content-creation")}
-                  className="hover:text-[#D4F636] transition-colors cursor-pointer text-left"
-                >
-                  Content Clipping
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onSelectTrackById("live-streaming")}
-                  className="hover:text-[#D4F636] transition-colors cursor-pointer text-left"
-                >
-                  Live Streaming &amp; Gaming
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onSelectTrackById("youtube-automation")}
-                  className="hover:text-[#D4F636] transition-colors cursor-pointer text-left"
-                >
-                  Faceless YouTube Automation
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 2: Community & Students */}
+          {/* Column 1: Community & Students */}
           <div>
             <h4 className="text-white font-bold text-sm sm:text-base mb-4 tracking-tight">
               Community &amp; Students
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm text-slate-300">
               <li>
-                <a href="#academy" className="hover:text-[#D4F636] transition-colors flex items-center gap-1.5 font-bold text-white">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#D4F636]"></span>
-                  <span>Student Academy (LMS)</span>
+                <a href="/support" className="hover:text-[#D4F636] transition-colors">
+                  Student Support &amp; FAQ
                 </a>
               </li>
-              <li>
-                <a href="#transformation" className="hover:text-[#D4F636] transition-colors">
-                  Learner Portfolios
-                </a>
-              </li>
-              <li>
-                <a href="#footer" className="hover:text-[#D4F636] transition-colors">
-                  Community Discord
-                </a>
-              </li>
-              <li>
-                <a href="#the-latest" className="hover:text-[#D4F636] transition-colors">
-                  Live AMAs &amp; Events
-                </a>
-              </li>
-              <li>
-                <a href="#footer" className="hover:text-[#D4F636] transition-colors">
-                  Creator Mentorship
-                </a>
-              </li>
+              {import.meta.env.VITE_DISCORD_INVITE_URL && (
+                <li>
+                  <a
+                    href={import.meta.env.VITE_DISCORD_INVITE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-[#D4F636] transition-colors"
+                  >
+                    Community Discord
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
 
-          {/* Column 3: Editorial & Resources */}
+          {/* Column 2: Editorial & Resources */}
           <div>
             <h4 className="text-white font-bold text-sm sm:text-base mb-4 tracking-tight">
               Editorial &amp; Resources
@@ -136,18 +82,8 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
                 </button>
               </li>
               <li>
-                <a href="#the-latest" className="hover:text-[#D4F636] transition-colors">
-                  Free Creator Guides
-                </a>
-              </li>
-              <li>
-                <a href="#the-latest" className="hover:text-[#D4F636] transition-colors">
-                  Channel Audit Checklist
-                </a>
-              </li>
-              <li>
-                <a href="#pathways" className="hover:text-[#D4F636] transition-colors">
-                  Creator Tech Stack Directory
+                <a href="/support" className="hover:text-[#D4F636] transition-colors">
+                  Frequently Asked Questions
                 </a>
               </li>
             </ul>
@@ -160,22 +96,22 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm text-slate-300">
               <li>
-                <a href="#footer" className="hover:text-[#D4F636] transition-colors">
+                <a href="/terms" className="hover:text-[#D4F636] transition-colors">
                   Terms of Service
                 </a>
               </li>
               <li>
-                <a href="#footer" className="hover:text-[#D4F636] transition-colors">
+                <a href="/privacy" className="hover:text-[#D4F636] transition-colors">
                   Privacy Policy
                 </a>
               </li>
               <li>
-                <a href="#footer" className="hover:text-[#D4F636] transition-colors">
+                <a href="/support" className="hover:text-[#D4F636] transition-colors">
                   Student Support
                 </a>
               </li>
               <li>
-                <a href="#footer" className="hover:text-[#D4F636] transition-colors">
+                <a href="/earnings-disclaimer" className="hover:text-[#D4F636] transition-colors">
                   Earnings &amp; Outcomes Disclaimer
                 </a>
               </li>

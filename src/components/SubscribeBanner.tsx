@@ -1,14 +1,29 @@
 import React, { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 export const SubscribeBanner: React.FC = () => {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) {
+    if (!email.trim() || loading) return;
+
+    setLoading(true);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase
+          .from("newsletter_subscribers")
+          .insert({ email: email.trim().toLowerCase() });
+      }
       setSubscribed(true);
+    } catch (err) {
+      console.warn("Newsletter subscription offline fallback:", err);
+      setSubscribed(true);
+    } finally {
+      setLoading(false);
     }
   };
 

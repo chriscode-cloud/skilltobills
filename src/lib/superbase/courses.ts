@@ -1,5 +1,3 @@
-
-
 import { supabase } from "./client";
 
 export type Course = {
@@ -33,7 +31,6 @@ export type Module = {
 export type ModuleWithLessons = Module & { lessons: Lesson[] };
 export type CourseWithModules = Course & { modules: ModuleWithLessons[] };
 
-
 export async function getCourses(): Promise<Course[]> {
   const { data, error } = await supabase
     .from("courses")
@@ -43,7 +40,6 @@ export async function getCourses(): Promise<Course[]> {
   if (error) throw error;
   return data as Course[];
 }
-
 
 export async function getCourseBySlug(slug: string): Promise<CourseWithModules | null> {
   const { data, error } = await supabase
@@ -64,7 +60,6 @@ export async function getCourseBySlug(slug: string): Promise<CourseWithModules |
   return course;
 }
 
-
 export async function getLesson(lessonId: string): Promise<Lesson | null> {
   const { data, error } = await supabase
     .from("lessons")
@@ -75,8 +70,6 @@ export async function getLesson(lessonId: string): Promise<Lesson | null> {
   if (error) throw error;
   return data as Lesson | null;
 }
-
-
 
 export async function markLessonComplete(lessonId: string): Promise<void> {
   const {
@@ -93,7 +86,6 @@ export async function markLessonComplete(lessonId: string): Promise<void> {
 
   if (error) throw error;
 }
-
 
 export async function markLessonIncomplete(lessonId: string): Promise<void> {
   const {
@@ -125,7 +117,6 @@ export async function getCompletedLessonIds(courseId: string): Promise<Set<strin
   if (error) throw error;
   return new Set((data as { lesson_id: string }[]).map((row) => row.lesson_id));
 }
-
 
 export async function getCourseProgressPercent(course: CourseWithModules): Promise<number> {
   const totalLessons = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);

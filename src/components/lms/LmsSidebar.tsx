@@ -6,8 +6,9 @@ import {
   MessageSquare, 
   Settings, 
   LogOut, 
-  Sparkles,
-  HelpCircle
+  ArrowLeft,
+  HelpCircle,
+  UserCheck
 } from "lucide-react";
 import { BrandLogo } from "../BrandLogo";
 
@@ -15,6 +16,8 @@ interface LmsSidebarProps {
   currentTab: "dashboard" | "course" | "resources" | "community" | "settings";
   onSelectTab: (tab: "dashboard" | "course" | "resources" | "community" | "settings") => void;
   onExit: () => void;
+  onLogout?: () => void;
+  userEmail?: string;
   courseTitle?: string;
 }
 
@@ -22,11 +25,16 @@ export const LmsSidebar: React.FC<LmsSidebarProps> = ({
   currentTab,
   onSelectTab,
   onExit,
+  onLogout,
+  userEmail = "student@skill2bills.com",
 }) => {
+  const displayName = userEmail.split("@")[0] || "Student";
+  const formattedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
   return (
     <aside className="w-full md:w-60 bg-[#08080a] border-b md:border-b-0 md:border-r border-white/10 flex flex-col justify-between p-4 md:py-6 shrink-0 z-30 font-sans">
       {/* Top Brand Mark */}
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex items-center justify-between px-2">
           <button
             type="button"
@@ -47,6 +55,22 @@ export const LmsSidebar: React.FC<LmsSidebarProps> = ({
               </div>
             </div>
           </button>
+        </div>
+
+        {/* User Card */}
+        <div className="mx-1 p-3 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#D4F636] text-black font-extrabold flex items-center justify-center text-xs shrink-0">
+            {formattedName.charAt(0)}
+          </div>
+          <div className="overflow-hidden">
+            <div className="text-xs font-bold text-white truncate flex items-center gap-1">
+              <span>{formattedName}</span>
+              <UserCheck className="w-3 h-3 text-[#D4F636] shrink-0" />
+            </div>
+            <div className="text-[11px] text-zinc-400 truncate">
+              {userEmail}
+            </div>
+          </div>
         </div>
 
         {/* Navigation Items */}
@@ -79,7 +103,7 @@ export const LmsSidebar: React.FC<LmsSidebarProps> = ({
                 }`}
               >
                 <PlaySquare className="w-4 h-4 shrink-0" />
-                <span>Course</span>
+                <span>Classroom</span>
               </button>
 
               <button
@@ -145,11 +169,22 @@ export const LmsSidebar: React.FC<LmsSidebarProps> = ({
         <button
           type="button"
           onClick={onExit}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all cursor-pointer"
         >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>Exit Academy</span>
+          <ArrowLeft className="w-4 h-4 shrink-0" />
+          <span>Back to Website</span>
         </button>
+
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>Log Out</span>
+          </button>
+        )}
       </div>
     </aside>
   );

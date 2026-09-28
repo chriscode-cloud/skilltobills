@@ -208,5 +208,93 @@ export const LMS_COURSES: Course[] = [
         ]
       }
     ]
+  },
+  {
+    id: "course-streaming",
+    slug: "live-streaming",
+    title: "Live Streaming & Broadcast Engineering",
+    description: "Master OBS Studio, multi-camera audio routing, Twitch alerts, and hardware encoders to manage top streamers' live shows.",
+    badge: "Tech Heavy",
+    discordUrl: "https://discord.gg",
+    modules: [
+      {
+        id: "mod-stream-1",
+        courseId: "course-streaming",
+        title: "Broadcast Architecture & Hardware Setup",
+        orderIndex: 1,
+        lessons: [
+          {
+            id: "les-stream-1",
+            moduleId: "mod-stream-1",
+            title: "OBS Studio Master Configuration",
+            duration: "3:45",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Optimal canvas resolutions, bitrate calculations for Twitch vs YouTube, NVENC encoding settings, and zero-dropped-frame configurations.",
+            resources: [{ name: "OBS 60FPS Optimization Checklist", type: "download", url: "#" }],
+            quiz: {
+              question: "What is the recommended audio sample rate across all devices to prevent drift?",
+              options: ["44.1 kHz", "48.0 kHz", "96.0 kHz"],
+              answerIndex: 1,
+              explanation: "48.0 kHz is the universal standard for video broadcast sync."
+            }
+          },
+          {
+            id: "les-stream-2",
+            moduleId: "mod-stream-1",
+            title: "Audio Routing & Noise Gate Filters",
+            duration: "4:30",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 2,
+            bodyContent: "Setup virtual audio cables (Voicemeeter / Elgato Wavelink) to separate Discord voices, game sound, Spotify, and microphone tracks.",
+            resources: [{ name: "Audio Routing Preset Guide", type: "template", url: "#" }]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: "course-youtube",
+    slug: "youtube-automation",
+    title: "Faceless YouTube Automation",
+    description: "Build scalable content systems using AI research, dynamic voice synthesis, automated stock b-roll, and high-CTR thumbnail psychology.",
+    badge: "High Retainer",
+    discordUrl: "https://discord.gg",
+    modules: [
+      {
+        id: "mod-yt-1",
+        courseId: "course-youtube",
+        title: "Niche Selection & Automated Scriptwriting",
+        orderIndex: 1,
+        lessons: [
+          {
+            id: "les-yt-1",
+            moduleId: "mod-yt-1",
+            title: "Identifying High-RPM Faceless Niches",
+            duration: "3:10",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Why finance, tech, documentary, and luxury niches command $15-$35 RPMs compared to gaming's $2 RPM.",
+            resources: [{ name: "Top 25 High-RPM Niches 2026", type: "download", url: "#" }],
+            quiz: {
+              question: "What metric determines the ad revenue earned per 1,000 views?",
+              options: ["CTR", "RPM (Revenue Per Mille)", "Retention Graph"],
+              answerIndex: 1,
+              explanation: "RPM measures the net creator revenue per thousand views after YouTube take-rate."
+            }
+          },
+          {
+            id: "les-yt-2",
+            moduleId: "mod-yt-1",
+            title: "Scriptwriting Engine with Structured Retention Curves",
+            duration: "4:20",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 2,
+            bodyContent: "How to structure 8-12 minute video scripts with 30-second loop payoffs that keep viewer retention above 55%.",
+            resources: [{ name: "Documentary Script Master Template", type: "prompt", content: "Act 1: The Inciting Incident, Act 2: The Hidden Truth, Act 3: The Resolution" }]
+          }
+        ]
+      }
+    ]
   }
 ];

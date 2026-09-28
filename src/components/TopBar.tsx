@@ -1,13 +1,28 @@
 import React, { useState, useRef, useEffect } from "react";
-import { User, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { AuthUser } from "../lib/auth";
 
 interface TopBarProps {
+  currentUser?: AuthUser | null;
   onLoginClick: () => void;
-  onCommunityClick: () => void;
-  onBlogClick: () => void;
+  onJoinClick?: () => void;
+  onCommunityClick?: () => void;
+  onBlogClick?: () => void;
+  onAcademyClick?: () => void;
+  onLogout?: () => void;
+  onSignUpClick?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, onBlogClick }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  currentUser,
+  onLoginClick,
+  onJoinClick,
+  onCommunityClick,
+  onBlogClick,
+  onAcademyClick,
+  onLogout,
+  onSignUpClick,
+}) => {
   const [communityOpen, setCommunityOpen] = useState(false);
   const communityRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +42,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
       className="bg-[#000000] text-slate-300 text-xs sm:text-sm font-medium py-2 px-4 sm:px-10 lg:px-16 flex items-center justify-end gap-3 sm:gap-6 border-b border-white/10 relative z-50 w-full max-w-full"
     >
       <div className="flex items-center gap-3 sm:gap-6">
-        {/* Community dropdown matching ALX style */}
+        {/* Community dropdown */}
         <div className="relative" ref={communityRef}>
           <button
             type="button"
@@ -46,7 +61,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
 
           {communityOpen && (
             <div className="absolute right-0 mt-3 w-64 sm:w-72 bg-white text-slate-900 rounded-b-2xl rounded-2xl shadow-2xl border border-slate-200/80 z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-150">
-              {/* Top item: All Community Hubs */}
               <button
                 type="button"
                 onClick={() => {
@@ -58,7 +72,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
                 <span>All Community Hubs</span>
               </button>
 
-              {/* Section label */}
               <div className="px-6 pt-5 pb-2 text-xs font-semibold text-slate-500">
                 Explore by Category
               </div>
@@ -93,41 +106,23 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
                   <span>Live AMAs &amp; Workshops</span>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-black group-hover:translate-x-0.5 transition-all" />
                 </a>
-
-                <a
-                  href="#footer"
-                  onClick={() => setCommunityOpen(false)}
-                  className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-700 hover:text-black hover:bg-slate-50 transition-colors group cursor-pointer text-left"
-                >
-                  <span>Creator Mentorship Network</span>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-black group-hover:translate-x-0.5 transition-all" />
-                </a>
               </div>
             </div>
           )}
         </div>
 
-
-
-        <button
-          type="button"
-          onClick={onBlogClick}
-          className="hover:text-white transition-colors cursor-pointer"
-        >
-          Blog
-        </button>
-
-        <a
-          href="#academy"
-          className="hover:text-[#D4F636] text-[#D4F636] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-          title="Student Academy & LMS"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-[#D4F636] animate-pulse"></span>
-          <span>Academy</span>
-        </a>
+        {onBlogClick && (
+          <button
+            type="button"
+            onClick={onBlogClick}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            Blog
+          </button>
+        )}
 
         <a
-          href="#footer"
+          href="/support"
           className="hover:text-white transition-colors hidden sm:inline-block"
         >
           Support
@@ -135,15 +130,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onLoginClick, onCommunityClick, 
 
         <div className="w-[1px] h-3.5 bg-white/20 hidden sm:block"></div>
 
+        {/* Stateless External Student Portal Link */}
         <button
           type="button"
           onClick={onLoginClick}
-          className="hover:text-white transition-colors flex items-center gap-1.5 font-semibold cursor-pointer"
+          className="hover:text-white text-zinc-300 transition-colors flex items-center gap-1.5 font-semibold text-xs cursor-pointer group"
+          title="Access Student Portal"
         >
-          <div className="w-5 h-5 rounded-full border border-white/50 flex items-center justify-center">
-            <User className="w-3 h-3 text-white" />
-          </div>
-          <span className="text-white hover:underline">Login</span>
+          <span>Student Login</span>
+          <span className="text-[#D4F636] group-hover:translate-x-0.5 transition-transform font-bold">&rarr;</span>
         </button>
       </div>
     </div>

@@ -1,23 +1,34 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { LmsSidebar } from "./LmsSidebar";
 import { StudentDashboard } from "./StudentDashboard";
 import { CourseClassroom } from "./CourseClassroom";
 import { CourseResources } from "./CourseResources";
 import { LMS_COURSES } from "./lmsData";
 import { Course, UserProgressState } from "./types";
-import { supabase } from "../../lib/superbase/supabase";
+import { supabase, isSupabaseConfigured } from "../../lib/supabase";
 
 interface LmsAppProps {
   onExitToWebsite: () => void;
+  onLogout?: () => void;
   initialCourseSlug?: string;
   userEmail?: string;
 }
 
-const STORAGE_KEY_PROGRESS = "skill2bills_lms_progress_v1";
+const STORAGE_KEY_PROGRESS = "skill2bills_lms_progress_v2";
 const STORAGE_KEY_ACTIVE_COURSE = "skill2bills_lms_active_course_v1";
+
+// Ensure legacy v1 progress containing fake completed lessons is cleared
+try {
+  if (typeof window !== "undefined" && localStorage.getItem("skill2bills_lms_progress_v1")) {
+    localStorage.removeItem("skill2bills_lms_progress_v1");
+  }
+} catch {
+  // ignore
+}
 
 export const LmsApp: React.FC<LmsAppProps> = ({
   onExitToWebsite,
+  onLogout,
   initialCourseSlug,
   userEmail = "creator@skill2bills.com",
 }) => {
@@ -33,6 +44,16 @@ export const LmsApp: React.FC<LmsAppProps> = ({
     }
     return LMS_COURSES[0].id;
   });
+
+  // Keep active course in sync if initialCourseSlug changes
+  useEffect(() => {
+    if (initialCourseSlug) {
+      const match = LMS_COURSES.find((c) => c.slug === initialCourseSlug);
+      if (match) {
+        setActiveCourseId(match.id);
+      }
+    }
+  }, [initialCourseSlug]);
 
   const activeCourse: Course =
     LMS_COURSES.find((c) => c.id === activeCourseId) || LMS_COURSES[0];
@@ -52,10 +73,10 @@ export const LmsApp: React.FC<LmsAppProps> = ({
     } catch {
       // ignore
     }
-    // Default initial mock progress for a realistic feel
+    // Clean initial progress: No fake pre-completed lessons
     return {
-      completedLessonIds: ["les-clip-1", "les-clip-2"],
-      lastActiveLessonId: "les-clip-3",
+      completedLessonIds: [],
+      lastActiveLessonId: "",
     };
   });
 
@@ -77,25 +98,47 @@ export const LmsApp: React.FC<LmsAppProps> = ({
     localStorage.setItem(STORAGE_KEY_ACTIVE_COURSE, activeCourseId);
   }, [activeCourseId]);
 
-  // Attempt to sync progress with Supabase if configured
+  // Flag to ensure initial union merge runs once on load and never overrides explicit unchecking
+  const hasReconciledRef = useRef(false);
+
+  // Attempt to sync progress with Supabase using union merge (initial load only)
   useEffect(() => {
-    if (!supabase) return;
+    if (!isSupabaseConfigured || hasReconciledRef.current) return;
     const fetchCloudProgress = async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        hasReconciledRef.current = true;
+
         const { data, error } = await supabase
           .from("user_progress")
           .select("lesson_id")
-          .eq("user_id", userEmail);
+          .eq("user_id", user.id);
 
-        if (!error && data && data.length > 0) {
-          const ids = data.map((d: any) => d.lesson_id);
-          setProgress((prev) => ({
-            ...prev,
-            completedLessonIds: Array.from(new Set([...prev.completedLessonIds, ...ids])),
-          }));
+        if (!error && data) {
+          const cloudIds: string[] = data.map((d: any) => d.lesson_id);
+          setProgress((prev) => {
+            const unionIds = Array.from(new Set([...prev.completedLessonIds, ...cloudIds]));
+            
+            // Promote any local-only completed lessons up to Supabase
+            const missingInCloud = prev.completedLessonIds.filter((id) => !cloudIds.includes(id));
+            if (missingInCloud.length > 0) {
+              const rows = missingInCloud.map((id) => ({
+                user_id: user.id,
+                lesson_id: id,
+                completed_at: new Date().toISOString(),
+              }));
+              supabase.from("user_progress").upsert(rows).then(() => {});
+            }
+
+            return {
+              ...prev,
+              completedLessonIds: unionIds,
+            };
+          });
         }
-      } catch (err) {
-        console.warn("Supabase user_progress fetch error:", err);
+      } catch {
+        // Offline fallback
       }
     };
     fetchCloudProgress();
@@ -119,22 +162,25 @@ export const LmsApp: React.FC<LmsAppProps> = ({
     }));
 
     // If Supabase is available, sync to user_progress table
-    if (supabase) {
+    if (isSupabaseConfigured) {
       try {
-        if (!isCompleted) {
-          await supabase.from("user_progress").upsert({
-            user_id: userEmail,
-            lesson_id: lessonId,
-            completed_at: new Date().toISOString(),
-          });
-        } else {
-          await supabase
-            .from("user_progress")
-            .delete()
-            .match({ user_id: userEmail, lesson_id: lessonId });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          if (!isCompleted) {
+            await supabase.from("user_progress").upsert({
+              user_id: user.id,
+              lesson_id: lessonId,
+              completed_at: new Date().toISOString(),
+            });
+          } else {
+            await supabase
+              .from("user_progress")
+              .delete()
+              .match({ user_id: user.id, lesson_id: lessonId });
+          }
         }
-      } catch (err) {
-        console.warn("Error toggling progress in Supabase:", err);
+      } catch {
+        // Offline fallback
       }
     }
   };
@@ -174,6 +220,8 @@ export const LmsApp: React.FC<LmsAppProps> = ({
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         onExit={onExitToWebsite}
+        onLogout={onLogout}
+        userEmail={userEmail}
         courseTitle={activeCourse.title}
       />
 

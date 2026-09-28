@@ -1,9 +1,5 @@
-
-
 import { supabase } from "./client";
 import { Profile } from "./supabase";
-
-
 
 export async function signUp(email: string, password: string) {
   const { data, error } = await supabase.auth.signUp({ email, password });
@@ -11,13 +7,11 @@ export async function signUp(email: string, password: string) {
   return data;
 }
 
-
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data;
 }
-
 
 export async function signInWithGoogle(redirectTo: string = window.location.origin) {
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -32,7 +26,6 @@ export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
-
 
 export async function getMyProfile(): Promise<Profile | null> {
   const {
@@ -49,7 +42,6 @@ export async function getMyProfile(): Promise<Profile | null> {
   if (error) throw error;
   return data as Profile;
 }
-
 
 export async function updateMyProfile(updates: Partial<Profile>): Promise<Profile> {
   const {
