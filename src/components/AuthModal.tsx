@@ -139,16 +139,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: window.location.origin,
-        },
-      });
+      if (isSupabaseConfigured && supabase) {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id, email, onboarding_completed")
+          .eq("email", cleanEmail)
+          .maybeSingle();
 
-      if (error) {
-        throw error;
+        if (activeTab === "register" && existingProfile) {
+          setErrorMessage("An account with this email address already exists. Please sign in instead.");
+          setLoading(false);
+          return;
+        }
+
+        if (activeTab === "login" && !existingProfile) {
+          setErrorMessage("No account found with this email. Please sign up to create a new account.");
+          setLoading(false);
+          return;
+        }
+
+        const { error } = await supabase.auth.signInWithOtp({
+          email: cleanEmail,
+          options: {
+            shouldCreateUser: activeTab === "register",
+            emailRedirectTo: window.location.origin,
+          },
+        });
+
+        if (error) {
+          throw error;
+        }
       }
 
       setStep("otp");

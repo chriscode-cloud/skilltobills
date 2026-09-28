@@ -271,17 +271,36 @@ export default function App() {
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (event === "SIGNED_IN" && session?.user) {
+          if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+            // Fetch live profile to check onboarding completion & track
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .maybeSingle();
+
             const rawMeta = session.user.user_metadata || {};
+            const isCompleted = profile ? Boolean(profile.onboarding_completed) : false;
+            const userTrack = profile?.track && profile.track !== "none" ? profile.track : "content-clipping";
+
             const authUser: AuthUser = {
               id: session.user.id,
-              email: session.user.email || "",
-              name: rawMeta.full_name || rawMeta.name || session.user.email?.split("@")[0] || "Creator",
-              avatar: rawMeta.avatar_url || rawMeta.picture,
+              email: session.user.email || profile?.email || "",
+              name: profile?.name || rawMeta.full_name || rawMeta.name || session.user.email?.split("@")[0] || "Creator",
+              role: (profile?.role as any) || "student",
+              onboardingCompleted: isCompleted,
+              track: userTrack,
+              avatar: profile?.avatar_url || rawMeta.avatar_url || rawMeta.picture,
               createdAt: session.user.created_at,
             };
+
             setStoredUser(authUser);
             setCurrentUser(authUser);
+
+            // Clean hash parameters if returning from magic link redirect
+            if (window.location.hash.includes("access_token")) {
+              window.history.replaceState(null, "", window.location.pathname);
+            }
           } else if (event === "SIGNED_OUT") {
             clearStoredUser();
             setCurrentUser(null);
@@ -299,9 +318,17 @@ export default function App() {
     };
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // ignore
+      }
+    }
     clearStoredUser();
     setCurrentUser(null);
+    window.location.assign("/signup");
   };
 
   return (
@@ -370,7 +397,11 @@ export default function App() {
         {/* STANDALONE LESSON PLAYER VIEW (Full screen curriculum stage) */}
         <Route
           path="/learn/:programme/:lesson"
-          element={<LessonPlayerPage currentUser={currentUser} />}
+          element={
+            <RequireAuth currentUser={currentUser}>
+              <LessonPlayerPage currentUser={currentUser} />
+            </RequireAuth>
+          }
         />
 
         {/* ADMIN ROUTES (Guarded by Role) */}

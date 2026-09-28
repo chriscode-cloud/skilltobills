@@ -33,7 +33,14 @@ export const PublicShell: React.FC<PublicShellProps> = ({ currentUser, onLogout 
         onLoginClick={() => navigate("/login")}
         onSignUpClick={() => navigate(currentUser ? "/dashboard" : "/signup")}
         onLogout={onLogout}
-        onSelectTrack={(slug) => navigate(`/programmes/${slug}`)}
+        onHomeClick={() => navigate("/")}
+        onExploreClick={() => navigate("/programmes")}
+        onSelectTrack={(trackOrSlug) => {
+          const slug = typeof trackOrSlug === "string"
+            ? trackOrSlug
+            : trackOrSlug?.slug || trackOrSlug?.id || "ai-virtual-influencers";
+          navigate(`/programmes/${slug}`);
+        }}
         onBlogClick={() => navigate("/blog")}
       />
 

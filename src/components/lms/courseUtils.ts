@@ -54,14 +54,12 @@ export const findCourseBySlugOrId = (identifier?: string): Course => {
 };
 
 /**
- * Returns ONLY the course(s) corresponding to the track selected during onboarding.
- * If the user has not completed onboarding/selected a track, returns empty list.
+ * Returns the course(s) corresponding to the user's selected track, or default track.
+ * Guaranteed to never return empty list so the LMS page never falls back to an error state.
  */
 export const getUserEnrolledCourses = (currentUser?: { track?: string } | null): Course[] => {
-  if (!currentUser || !currentUser.track) {
-    return [];
-  }
-  const primary = findCourseBySlugOrId(currentUser.track);
+  const trackIdentifier = currentUser?.track && currentUser.track !== "none" ? currentUser.track : "content-clipping";
+  const primary = findCourseBySlugOrId(trackIdentifier);
   return [primary];
 };
 
@@ -71,7 +69,7 @@ export const getUserEnrolledCourses = (currentUser?: { track?: string } | null):
  */
 export const getSafeEmbedUrl = (rawUrl?: string): string => {
   if (!rawUrl || !rawUrl.trim()) {
-    return "https://www.youtube-nocookie.com/embed/M7lc1UVf-VE?rel=0&modestbranding=1";
+    return "https://www.youtube.com/embed/M7lc1UVf-VE?rel=0&modestbranding=1";
   }
 
   const trimmed = rawUrl.trim();
@@ -87,7 +85,7 @@ export const getSafeEmbedUrl = (rawUrl?: string): string => {
       const urlObj = new URL(trimmed);
       const v = urlObj.searchParams.get("v");
       if (v) {
-        return `https://www.youtube-nocookie.com/embed/${v}?rel=0&modestbranding=1`;
+        return `https://www.youtube.com/embed/${v}?rel=0&modestbranding=1`;
       }
     } catch {
       // parse fallback
@@ -98,7 +96,7 @@ export const getSafeEmbedUrl = (rawUrl?: string): string => {
   if (trimmed.includes("youtu.be/")) {
     const parts = trimmed.split("youtu.be/")[1]?.split("?")[0];
     if (parts) {
-      return `https://www.youtube-nocookie.com/embed/${parts}?rel=0&modestbranding=1`;
+      return `https://www.youtube.com/embed/${parts}?rel=0&modestbranding=1`;
     }
   }
 
@@ -110,9 +108,9 @@ export const getSafeEmbedUrl = (rawUrl?: string): string => {
     }
   }
 
-  // If it's a plain YouTube Video ID (e.g. "M7lc1UVf-VE" or alphanumeric 8-15 chars)
+  // If it's a plain YouTube Video ID (e.g. "M7lc1UVf-VE" or alphanumeric 8-16 chars)
   if (/^[a-zA-Z0-9_-]{8,16}$/.test(trimmed)) {
-    return `https://www.youtube-nocookie.com/embed/${trimmed}?rel=0&modestbranding=1`;
+    return `https://www.youtube.com/embed/${trimmed}?rel=0&modestbranding=1`;
   }
 
   // If it's an external absolute URL (https://)
@@ -120,6 +118,6 @@ export const getSafeEmbedUrl = (rawUrl?: string): string => {
     return trimmed;
   }
 
-  // Safety fallback for any malformed string to prevent relative URL iframe loading!
-  return `https://www.youtube-nocookie.com/embed/M7lc1UVf-VE?rel=0&modestbranding=1`;
+  // Safety fallback
+  return `https://www.youtube.com/embed/M7lc1UVf-VE?rel=0&modestbranding=1`;
 };

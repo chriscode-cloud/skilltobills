@@ -189,11 +189,29 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             type="button"
-            onClick={onExploreClick}
+            onClick={() => onExploreClick?.()}
             className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-bold text-xs tracking-wider uppercase px-5 py-2.5 rounded-full transition-all duration-200 cursor-pointer ml-2 shadow-sm"
           >
             Explore Programmes
           </button>
+
+          {currentUser ? (
+            <button
+              type="button"
+              onClick={onSignUpClick}
+              className="bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-full transition-all cursor-pointer"
+            >
+              LMS Dashboard &rarr;
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onLoginClick}
+              className="bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-full transition-all cursor-pointer"
+            >
+              Sign In
+            </button>
+          )}
         </div>
 
         {/* Mobile Hamburger toggle */}

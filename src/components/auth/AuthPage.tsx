@@ -91,7 +91,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     setErrorMessage("");
     setInfoMessage("");
 
-    if (!email.trim() || !email.includes("@")) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
       setErrorMessage("Please enter a valid email address.");
       return;
     }
@@ -105,10 +107,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
 
     try {
       if (isSupabaseConfigured && supabase) {
+        // Check for duplicate account on Sign Up
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id, email, onboarding_completed")
+          .eq("email", normalizedEmail)
+          .maybeSingle();
+
+        if (mode === "signup" && existingProfile) {
+          setErrorMessage("An account with this email address already exists. Please sign in instead.");
+          setLoading(false);
+          return;
+        }
+
+        if (mode === "login" && !existingProfile) {
+          setErrorMessage("No account found with this email. Please sign up to create a new account.");
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           options: {
-            shouldCreateUser: true,
+            shouldCreateUser: mode === "signup",
+            emailRedirectTo: `${window.location.origin}/dashboard`,
             data: {
               full_name: name.trim() || undefined,
             },
@@ -118,7 +140,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         if (error) throw error;
 
         setIsOtpSent(true);
-        setInfoMessage(`We sent a 6-digit code to ${email.trim()}. Enter it below to continue.`);
+        setInfoMessage(`We sent a magic sign-in link and verification code to ${normalizedEmail}. Click the link in your email to sign in instantly, or enter your 6-digit code below!`);
       } else {
         // Safe offline simulated login for development
         setIsOtpSent(true);
@@ -135,6 +157,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = otp.join("").trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
     if (token.length !== 6) {
       setErrorMessage("Please enter all 6 digits of the verification code.");
       return;
@@ -146,7 +170,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     try {
       if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           token,
           type: "email",
         });
@@ -154,12 +178,39 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         if (error) throw error;
 
         if (data.user) {
+          // Fetch existing profile to preserve onboarding completed & track status
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .maybeSingle();
+
+          // Ensure profile row exists
+          if (!profile) {
+            try {
+              await supabase.from("profiles").upsert({
+                id: data.user.id,
+                email: normalizedEmail,
+                name: name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
+                role: "student",
+                onboarding_completed: false,
+                created_at: new Date().toISOString(),
+              });
+            } catch {
+              // ignore
+            }
+          }
+
+          const isCompleted = profile ? Boolean(profile.onboarding_completed) : false;
+          const userTrack = profile?.track && profile.track !== "none" ? profile.track : undefined;
+
           const authUser: AuthUser = {
             id: data.user.id,
-            email: data.user.email || email.trim().toLowerCase(),
-            name: name.trim() || data.user.user_metadata?.full_name || email.split("@")[0],
-            role: "student",
-            onboardingCompleted: false,
+            email: data.user.email || normalizedEmail,
+            name: profile?.name || name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
+            role: (profile?.role as any) || "student",
+            onboardingCompleted: isCompleted,
+            track: userTrack,
             createdAt: data.user.created_at,
           };
 
@@ -170,10 +221,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         // Offline development fallback
         const devUser: AuthUser = {
           id: `dev-${Date.now()}`,
-          email: email.trim().toLowerCase(),
-          name: name.trim() || email.split("@")[0],
+          email: normalizedEmail,
+          name: name.trim() || normalizedEmail.split("@")[0],
           role: "student",
-          onboardingCompleted: false,
+          onboardingCompleted: mode === "login",
+          track: mode === "login" ? "content-clipping" : undefined,
           createdAt: new Date().toISOString(),
         };
         setStoredUser(devUser);

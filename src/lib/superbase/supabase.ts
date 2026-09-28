@@ -86,18 +86,35 @@ export async function saveOnboardingData(
 }
 
 export async function getAllProfiles(): Promise<Profile[]> {
-  if (isSupabaseConfigured) {
+  if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        return data as Profile[];
+      if (!error && data) {
+        const localLeads = JSON.parse(localStorage.getItem("skill2bill_creator_leads") || "[]");
+        const profileMap = new Map<string, Profile>();
+
+        data.forEach((p: any) => {
+          if (p.email) {
+            profileMap.set(p.email.toLowerCase(), p as Profile);
+          } else if (p.id) {
+            profileMap.set(p.id, p as Profile);
+          }
+        });
+
+        localLeads.forEach((p: any) => {
+          if (p.email && !profileMap.has(p.email.toLowerCase())) {
+            profileMap.set(p.email.toLowerCase(), p as Profile);
+          }
+        });
+
+        return Array.from(profileMap.values());
       }
-    } catch {
-      // Offline fallback
+    } catch (err) {
+      console.warn("Could not fetch profiles from Supabase:", err);
     }
   }
 

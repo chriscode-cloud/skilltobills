@@ -17,7 +17,8 @@ import {
   ExternalLink,
   HelpCircle,
   Video,
-  AlertTriangle
+  AlertTriangle,
+  MessageSquare
 } from "lucide-react";
 import { Course, Lesson } from "./types";
 import { AuthUser } from "../../lib/auth";
@@ -47,6 +48,10 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
   const currentLesson = activeIndex !== -1 ? allLessonsWithModule[activeIndex] : allLessonsWithModule[0];
   const prevLesson = activeIndex > 0 ? allLessonsWithModule[activeIndex - 1] : null;
   const nextLesson = activeIndex + 1 < allLessonsWithModule.length ? allLessonsWithModule[activeIndex + 1] : null;
+
+  const currentModuleObj = course.modules.find((m) => m.id === currentLesson.moduleId) || course.modules[0];
+  const currentModuleLessons = currentModuleObj ? currentModuleObj.lessons : [];
+  const completedInModule = currentModuleLessons.filter((l) => completedLessonIds.includes(l.id)).length;
 
   usePageMeta(`${currentLesson.title} | ${course.title}`);
 
@@ -144,19 +149,19 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex flex-col font-sans">
       {/* Top Bar for Lesson Player */}
-      <div className="h-14 bg-zinc-950 border-b border-zinc-900 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-3">
+      <div className="h-14 bg-[#0c0c0e] border-b border-zinc-900 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
+        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
           <Link
             to={`/learn/${course.slug}`}
-            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Overview</span>
+            <ChevronLeft className="w-4 h-4" />
+            <span>Back to course</span>
           </Link>
-          <div className="h-4 w-px bg-zinc-800" />
-          <span className="text-xs text-zinc-400 truncate max-w-xs sm:max-w-md font-mono">
-            {course.title} &bull; {currentLesson.moduleTitle}
-          </span>
+          <span className="text-zinc-600">&gt;</span>
+          <span className="text-zinc-300 hidden sm:inline">{currentLesson.moduleTitle}</span>
+          <span className="text-zinc-600 hidden sm:inline">&gt;</span>
+          <span className="text-[#D4F636] font-bold truncate max-w-xs">{currentLesson.title}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -191,33 +196,14 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
           {/* Lesson Video Stage */}
           <div className="space-y-3">
             <div className="w-full aspect-video rounded-3xl overflow-hidden bg-black border border-zinc-800 shadow-2xl relative">
-              {!embedError ? (
-                <iframe
-                  src={safeVideoUrl}
-                  title={currentLesson.title}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  onError={() => setEmbedError(true)}
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3 bg-zinc-900">
-                  <AlertTriangle className="w-10 h-10 text-amber-400" />
-                  <p className="text-sm font-bold text-white">Video Player Direct Stream</p>
-                  <p className="text-xs text-zinc-400 max-w-sm">
-                    If this stream is restricted by your browser sandbox, click below to open the official lesson master video:
-                  </p>
-                  <a
-                    href={externalVideoLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-4 py-2 rounded-xl bg-[#D4F636] text-black font-extrabold text-xs flex items-center gap-2 hover:bg-[#c2e42b] transition-colors"
-                  >
-                    <span>Watch Lesson on YouTube</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
+              <iframe
+                src={safeVideoUrl}
+                title={currentLesson.title}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
             </div>
 
             {/* Video utility controls */}
@@ -472,66 +458,88 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
           </div>
         </div>
 
-        {/* Desktop Sidebar: Curriculum Outline */}
-        <div className="hidden lg:flex w-80 bg-zinc-950 border-l border-zinc-900 flex-col shrink-0">
-          <div className="p-4 border-b border-zinc-900">
-            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-              Curriculum Lessons ({allLessonsWithModule.length})
-            </h2>
+        {/* Desktop Sidebar: Curriculum Outline & Phase Progress */}
+        <div className="hidden lg:flex w-80 bg-[#0c0c0e] border-l border-zinc-900 flex-col shrink-0 p-4 space-y-6 overflow-y-auto">
+          {/* Phase Progress Card */}
+          <div className="bg-[#121216] border border-zinc-800/80 rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-wider">
+              <span className="text-zinc-500">CURRENT PHASE</span>
+              <span className="text-[#D4F636]">{Math.round((completedInModule / Math.max(currentModuleLessons.length, 1)) * 100)}%</span>
+            </div>
+            <h3 className="font-extrabold text-sm text-white">
+              {currentLesson.moduleTitle}
+            </h3>
+            <p className="text-xs text-zinc-400 font-mono">
+              {completedInModule} of {currentModuleLessons.length} lessons completed
+            </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-zinc-900">
+          {/* Community Discord Box */}
+          <div className="bg-[#121216] border border-zinc-800/80 rounded-xl p-4 space-y-3">
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono font-bold text-[#D4F636] uppercase tracking-wider">
+                COMMUNITY
+              </div>
+              <p className="text-xs font-bold text-white">
+                Connect with other Academy creators.
+              </p>
+            </div>
+            <a
+              href={import.meta.env.VITE_DISCORD_INVITE_URL || "https://discord.gg"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_10px_rgba(212,246,54,0.2)]"
+            >
+              <MessageSquare className="w-4 h-4 fill-current" />
+              <span>OPEN DISCORD</span>
+            </a>
+          </div>
+
+          {/* Modules & Lessons List */}
+          <div className="space-y-4 pt-2">
             {course.modules.map((mod) => (
-              <div key={mod.id} className="py-2">
-                <div className="px-4 py-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
+              <div key={mod.id} className="space-y-2">
+                <div className="text-[10px] font-mono font-black text-zinc-500 uppercase tracking-widest px-1">
                   {mod.title}
                 </div>
-                <div className="space-y-0.5 px-2">
+                <div className="space-y-1">
                   {mod.lessons.map((les) => {
                     const isActive = les.id === currentLesson.id;
                     const isLesCompleted = completedLessonIds.includes(les.id);
-                    const globalIdx = allLessonsWithModule.findIndex((l) => l.id === les.id);
-                    const locked = isLessonLocked(globalIdx);
 
                     return (
                       <button
                         key={les.id}
                         type="button"
-                        disabled={locked}
                         onClick={() => navigate(`/learn/${course.slug}/${les.id}`)}
-                        className={`w-full p-2.5 rounded-xl text-left flex items-start gap-2.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`w-full p-2.5 rounded-xl text-left flex items-center justify-between transition-all cursor-pointer ${
                           isActive
-                            ? "bg-[#D4F636] text-black font-extrabold shadow-sm"
-                            : "hover:bg-zinc-900 text-zinc-300"
+                            ? "bg-[#1c220a] text-[#D4F636] border border-[#3b4711]"
+                            : "hover:bg-zinc-900/60 text-zinc-300"
                         }`}
                       >
-                        <div className="mt-0.5 shrink-0">
-                          {locked ? (
-                            <Lock className="w-3.5 h-3.5 text-zinc-600" />
-                          ) : isLesCompleted ? (
-                            <CheckCircle2
-                              className={`w-3.5 h-3.5 ${
-                                isActive ? "text-black" : "text-emerald-400"
-                              }`}
-                            />
-                          ) : (
-                            <Play
-                              className={`w-3.5 h-3.5 ${
-                                isActive ? "text-black fill-current" : "text-zinc-500"
-                              }`}
-                            />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs truncate leading-snug">{les.title}</p>
-                          <span
-                            className={`text-[10px] font-mono block ${
-                              isActive ? "text-black/80" : "text-zinc-500"
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                              isLesCompleted
+                                ? "bg-[#D4F636] text-black"
+                                : isActive
+                                ? "border-2 border-[#D4F636] text-[#D4F636]"
+                                : "bg-zinc-800 text-zinc-600"
                             }`}
                           >
-                            {les.duration}
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          </div>
+                          <span className={`text-xs truncate font-medium ${isActive ? "font-extrabold text-[#D4F636]" : "text-zinc-300"}`}>
+                            {les.title}
                           </span>
                         </div>
+
+                        {les.duration && (
+                          <span className="text-[10px] font-mono text-zinc-500 shrink-0">
+                            {les.duration}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
