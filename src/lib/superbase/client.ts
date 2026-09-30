@@ -45,6 +45,9 @@ function normalizeSupabaseKey(rawKey: string | undefined): string {
   return key;
 }
 
+const DEFAULT_PROJECT_URL = "https://pvsrowtmzpgmieooafbn.supabase.co";
+const DEFAULT_PROJECT_KEY = "sb_publishable_oXrM0xJLWZ-mZqoLjVwfCA_cCg_Kp6R";
+
 const getRawUrl = (): string => {
   if (typeof window !== "undefined") {
     try {
@@ -54,7 +57,7 @@ const getRawUrl = (): string => {
       // Ignore
     }
   }
-  return import.meta.env.VITE_SUPABASE_URL || "";
+  return import.meta.env.VITE_SUPABASE_URL || DEFAULT_PROJECT_URL;
 };
 
 const getRawKey = (): string => {
@@ -69,7 +72,7 @@ const getRawKey = (): string => {
   return (
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     import.meta.env.VITE_SUPABASE_ANON_KEY ||
-    ""
+    DEFAULT_PROJECT_KEY
   );
 };
 

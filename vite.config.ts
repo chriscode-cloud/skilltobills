@@ -6,6 +6,14 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
+        process.env.VITE_SUPABASE_URL || 'https://pvsrowtmzpgmieooafbn.supabase.co'
+      ),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
+        process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_oXrM0xJLWZ-mZqoLjVwfCA_cCg_Kp6R'
+      ),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
