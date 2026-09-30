@@ -30,7 +30,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
             </a>
             <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm">
               <a
-                href="#admin"
+                href="/admin"
                 className="hover:text-slate-300 transition-colors cursor-pointer"
                 title="Admin"
               >
