@@ -39,6 +39,7 @@ import { COURSE_TRACKS, CourseTrack, BLOG_ARTICLES } from "./data/contentData";
 import { getStoredUser, clearStoredUser, setStoredUser, AuthUser } from "./lib/auth";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { usePageMeta } from "./hooks/usePageMeta";
+import { Analytics } from "@vercel/analytics/react";
 
 // --- Route Guard: Require Authenticated Student ---
 const RequireAuth: React.FC<{
@@ -404,6 +405,7 @@ export default function App() {
         {/* 404 FALLBACK */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      <Analytics />
     </BrowserRouter>
   );
 }
