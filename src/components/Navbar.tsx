@@ -195,23 +195,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             Explore Programmes
           </button>
 
-          {currentUser ? (
-            <button
-              type="button"
-              onClick={onLogout}
-              className="bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-full transition-all cursor-pointer"
-            >
-              Sign Out
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onLoginClick}
-              className="bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-full transition-all cursor-pointer"
-            >
-              Sign In
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onLoginClick}
+            className="bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-full transition-all cursor-pointer"
+          >
+            Sign In
+          </button>
         </div>
 
         {/* Mobile Hamburger toggle */}
@@ -288,7 +278,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </a>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col gap-2">
             <button
               type="button"
               onClick={() => {
@@ -298,6 +288,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="w-full bg-[#D4F636] text-black font-bold py-3 rounded-full text-center text-sm shadow-md hover:bg-[#c2e42b]"
             >
               Explore All Creator Programmes
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onLoginClick();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold py-3 rounded-full text-center text-sm shadow-md transition-colors"
+            >
+              Sign In
             </button>
           </div>
         </div>
