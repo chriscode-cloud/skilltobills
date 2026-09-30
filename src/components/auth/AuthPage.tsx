@@ -197,7 +197,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     const normalizedEmail = email.trim().toLowerCase();
 
     if (token.length < 6) {
-      setErrorMessage("Please enter your 8-digit verification code.");
+      setErrorMessage("Please enter your verification code.");
       return;
     }
 
@@ -499,7 +499,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                         setOtpCode(pasted.slice(0, 8));
                       }
                     }}
-                    placeholder="Enter 8-digit code"
+                    placeholder="Enter verification code"
                     className="w-full text-center font-mono font-black text-2xl tracking-[6px] sm:tracking-[10px] py-4 px-4 rounded-xl bg-zinc-900 border border-zinc-800 text-[#D4F636] focus:border-[#D4F636] focus:ring-2 focus:ring-[#D4F636]/30 outline-none transition-all placeholder:text-zinc-600 placeholder:text-sm placeholder:font-normal placeholder:tracking-normal"
                   />
                 </div>
