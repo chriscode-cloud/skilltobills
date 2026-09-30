@@ -142,68 +142,278 @@ export const LMS_COURSES: Course[] = [
       {
         id: "mod-ai-1",
         courseId: "course-ai",
-        title: "Introduction",
+        title: "Module 1: Foundations of AI Influencer Marketing",
         orderIndex: 1,
         lessons: [
           {
             id: "les-ai-1",
             moduleId: "mod-ai-1",
-            title: "Welcome to the Future of Influence",
-            duration: "2:57",
-            videoUrl: "M7lc1UVf-VE",
+            title: "Introduction to AI Influencers",
+            duration: "7:47.9",
+            videoUrl: "https://www.youtube.com/embed/vRPO57Qhg4U?si=qO39NYrFoiM0mywr&start=0&end=468&controls=1",
             orderIndex: 1,
-            bodyContent: "Discover how AI-generated virtual talent is disrupting traditional creator partnerships and operating at 95% profit margins.",
-            resources: [{ name: "AI Influencer Starter Kit", type: "download", url: "#" }]
+            bodyContent: `Core Concept Overview
+This foundational lesson explores the rapid evolution of virtual creators and breaks down how modern generative models allow creators to build 24/7 scalable AI influencers. Rather than treating an AI persona as simple viral content, successful creators treat them as automated digital assets that solve specific audience problems and capture leads.
+
+Key Takeaways & Chapter Breakdown
+
+1. The Technological Paradigm Shift
+- Model Breakthroughs: Recent generative updates have eliminated legacy issues like robotic speech, unnatural lip-sync, and uncanny facial expressions.
+- Scalability: AI influencers operate as digital extensions that can publish daily across multiple platforms (Instagram, TikTok, YouTube Shorts) without requiring on-camera presence, studio lighting, or physical filming.
+
+2. Real-World Case Studies & Personas
+- Lifestyle & Wealth Personas: High-engagement profiles (e.g., Omar Wisman, Jing Chen) leverage aspirational storytelling to sell courses, software, or digital products via bio links.
+- Niche Habit & Transformation Personas: Accounts focused on physical fitness or self-improvement drive multi-million view virality by tapping into dramatic transformation arcs.
+- Archetype Niches: Storytelling and wisdom-driven accounts (e.g., philosophical or spiritual personas) generate massive organic reach by creating emotional connections with viewers.
+
+3. The 3 Archetypes of AI Influencers
+• Archetype 1: Entertainment
+  - Focus & Content Style: Memes, funny clips, viral stories
+  - Reach Potential: Very High
+  - Monetization Viability: Low (Viewers scroll past without converting)
+• Archetype 2: Aesthetic / Lifestyle
+  - Focus & Content Style: Visual models, fashion, aesthetic renders
+  - Reach Potential: High
+  - Monetization Viability: Moderate (High competition, relies heavily on brand deals)
+• Archetype 3: Problem-Solving
+  - Focus & Content Style: Targeted advice (dating, finance, fitness, habits)
+  - Reach Potential: Targeted / Niche
+  - Monetization Viability: Extremely High (Builds deep trust and direct monetization)
+
+Strategic Rule: Always build around a Problem-Solving Archetype. High-intent views that solve a specific problem are significantly more valuable than generic viral views.
+
+Why 99% of AI Influencers Fail
+- Generic Quality: Relying on default prompts results in generic faces, unnatural vocal cadences, and recycled scripts that viewers scroll past immediately.
+- Lack of Direction: Posting random, disconnected topics instead of sticking to a tight niche persona destroys audience retention and platform authority.
+- Chasing Views Instead of Systems: Treating the page as "content-first" rather than a structured conversion funnel with a call-to-action (CTA) results in high view counts with zero revenue.`
           },
           {
             id: "les-ai-2",
             moduleId: "mod-ai-1",
-            title: "Before You Start",
-            duration: "3:40",
-            videoUrl: "M7lc1UVf-VE",
+            title: "Defining Your AI Persona",
+            duration: "5:47",
+            videoUrl: "https://www.youtube.com/embed/z6FZGXKCF50?si=6BD2R0NKXjzvYMXg&start=0&end=347&controls=1",
             orderIndex: 2,
-            bodyContent: "Legal compliance, ethical disclosures, platform safety guidelines, and setup requirements.",
-            resources: [{ name: "FTC & AI Platform Disclosure Guide", type: "download", url: "#" }]
+            bodyContent: "Develop a detailed identity for your AI influencer, including backstory, personality traits, and target audience, crucial for building a loyal following and maintaining engagement. \"If she drifts between photos, the fan who notices is the fan who stops paying.\""
+          },
+          {
+            id: "les-ai-3",
+            moduleId: "mod-ai-1",
+            title: "Legal & Ethical Frameworks",
+            duration: "3:10",
+            videoUrl: "https://www.youtube.com/embed/TJ5Ixwp-59c?si=NThilcsDjyoDD7yp&start=0&controls=1",
+            orderIndex: 3,
+            bodyContent: "Publishing AI content requires adherence to evolving international regulations, disclosure mandates, and intellectual property standards. Understanding watermarking rules, creator disclosures, and legal boundaries prevents account penalties, copyright disputes, and regulatory enforcement."
           }
         ]
       },
       {
         id: "mod-ai-2",
         courseId: "course-ai",
-        title: "Creating Your Model",
+        title: "Module 2: Advanced Character Design & Consistency",
         orderIndex: 2,
         lessons: [
           {
-            id: "les-ai-3",
-            moduleId: "mod-ai-2",
-            title: "Select Your Niche",
-            duration: "2:08",
-            videoUrl: "M7lc1UVf-VE",
-            orderIndex: 1,
-            bodyContent: "Fitness, tech lifestyle, gaming, or high fashion. How to choose a lucrative niche with active brand budgets.",
-            resources: [{ name: "Niche Monetization Calculator", type: "template", url: "#" }]
-          },
-          {
             id: "les-ai-4",
             moduleId: "mod-ai-2",
-            title: "Create Your Character & Facial Consistency",
-            duration: "5:15",
+            title: "Casting Your AI Model",
+            duration: "6:40",
+            videoUrl: "https://www.youtube.com/embed/wsszCSX0EtE?si=OIk04wS4v2C924jQ&start=45&end=445&controls=1",
+            orderIndex: 1,
+            bodyContent: "The core process of creating a consistent AI influencer revolves around generating a multi-angle character board to serve as a persistent reference image, paired with scene swapping and free 4K upscaling to generate unlimited photorealistic content."
+          },
+          {
+            id: "les-ai-5",
+            moduleId: "mod-ai-2",
+            title: "Achieving Visual Consistency",
+            duration: "8:12",
+            videoUrl: "https://www.youtube.com/embed/zV8EPHM1d4c?si=I-RP4av0kOxODIxF&start=67&controls=1",
+            orderIndex: 2,
+            bodyContent: "Implement advanced techniques for maintaining facial geometry and overall appearance across diverse poses, outfits, and lighting conditions. \"One face that stays identical in every image. That's the whole technical problem.\""
+          },
+          {
+            id: "les-ai-6",
+            moduleId: "mod-ai-2",
+            title: "Wardrobe, Styling & Environment Design",
+            duration: "4:05",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 3,
+            bodyContent: "Develop a consistent aesthetic for your AI's attire and background environments to enhance realism and brand identity."
+          }
+        ]
+      },
+      {
+        id: "mod-ai-3",
+        courseId: "course-ai",
+        title: "Module 3: Dynamic Content Creation",
+        orderIndex: 3,
+        lessons: [
+          {
+            id: "les-ai-7",
+            moduleId: "mod-ai-3",
+            title: "Image-to-Video Animation",
+            duration: "4:40",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Learn to transform static images into dynamic video clips using tools like Kling AI and Runway Gen-3, emphasizing realistic motion and minimal distortion."
+          },
+          {
+            id: "les-ai-8",
+            moduleId: "mod-ai-3",
+            title: "Realistic Voice & Lip-Sync",
+            duration: "5:10",
             videoUrl: "M7lc1UVf-VE",
             orderIndex: 2,
-            bodyContent: "The master method for generating consistent face meshes across multiple scenes, outfits, and lighting conditions.",
-            resources: [
-              { name: "Face-Lock LoRA Prompts (.txt)", type: "prompt", content: "photorealistic 8k portrait, symmetrical lighting, consistent seed #8921" }
-            ],
-            quiz: {
-              question: "What tool or technique ensures facial features do not morph between images?",
-              options: [
-                "Random seeds every render",
-                "Fixed seeds combined with FaceID LoRAs or IP-Adapters",
-                "Low resolution renders"
-              ],
-              answerIndex: 1,
-              explanation: "IP-Adapter and trained LoRAs preserve identical facial bone structure across different prompts."
-            }
+            bodyContent: "Integrate AI-generated voices from platforms like ElevenLabs with precise lip-sync animation using tools such as Hedra or HeyGen for compelling spoken content."
+          },
+          {
+            id: "les-ai-9",
+            moduleId: "mod-ai-3",
+            title: "Motion Control & Special Effects",
+            duration: "4:15",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 3,
+            bodyContent: "Utilize advanced tools like Viggle AI for specific motion control and explore techniques for adding special effects and seamless transitions in video editing software."
+          }
+        ]
+      },
+      {
+        id: "mod-ai-4",
+        courseId: "course-ai",
+        title: "Module 4: Audience Engagement & Platform Strategy",
+        orderIndex: 4,
+        lessons: [
+          {
+            id: "les-ai-10",
+            moduleId: "mod-ai-4",
+            title: "Building a Multi-Platform Presence",
+            duration: "3:55",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Strategize content distribution across key platforms like Instagram, TikTok, and Facebook, understanding each platform's unique audience and algorithm. \"It's Instagram, and it's a numbers game with rules.\""
+          },
+          {
+            id: "les-ai-11",
+            moduleId: "mod-ai-4",
+            title: "Crafting Engaging Narratives",
+            duration: "4:20",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 2,
+            bodyContent: "Develop compelling storylines and content series that resonate with your target audience, fostering community and driving interaction."
+          },
+          {
+            id: "les-ai-12",
+            moduleId: "mod-ai-4",
+            title: "Community Management & Interaction",
+            duration: "3:30",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 3,
+            bodyContent: "Learn best practices for responding to comments, managing direct messages, and building an engaged community around your AI influencer."
+          }
+        ]
+      },
+      {
+        id: "mod-ai-5",
+        courseId: "course-ai",
+        title: "Module 5: Monetization & Business Acumen",
+        orderIndex: 5,
+        lessons: [
+          {
+            id: "les-ai-13",
+            moduleId: "mod-ai-5",
+            title: "Direct Fan Monetization",
+            duration: "5:05",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Explore strategies for converting followers into paying subscribers on platforms like Fanvue, focusing on exclusive content and pay-per-view interactions. \"The money actually is... from chat messages. Subscriptions are about a seventh.\""
+          },
+          {
+            id: "les-ai-14",
+            moduleId: "mod-ai-5",
+            title: "Brand Partnerships & Sponsorships",
+            duration: "4:35",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 2,
+            bodyContent: "Identify potential brand collaborations and learn how to pitch your AI influencer for paid endorsements and sponsored content."
+          },
+          {
+            id: "les-ai-15",
+            moduleId: "mod-ai-5",
+            title: "Diversified Income Streams",
+            duration: "3:50",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 3,
+            bodyContent: "Discover alternative monetization methods, such as offering AI-generated product photography services or selling digital assets created by your AI."
+          }
+        ]
+      },
+      {
+        id: "mod-ai-6",
+        courseId: "course-ai",
+        title: "Module 6: Analytics, Optimization & Future Trends",
+        orderIndex: 6,
+        lessons: [
+          {
+            id: "les-ai-16",
+            moduleId: "mod-ai-6",
+            title: "Performance Tracking & Analytics",
+            duration: "4:00",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Utilize analytics tools to monitor engagement, identify successful content, and optimize your strategy for continuous growth."
+          },
+          {
+            id: "les-ai-17",
+            moduleId: "mod-ai-6",
+            title: "Iterative Improvement & A/B Testing",
+            duration: "3:45",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 2,
+            bodyContent: "Implement a data-driven approach to content creation, constantly testing and refining your methods based on audience feedback and performance metrics."
+          },
+          {
+            id: "les-ai-18",
+            moduleId: "mod-ai-6",
+            title: "Staying Ahead of the Curve",
+            duration: "4:10",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 3,
+            bodyContent: "Explore emerging AI tools, evolving platform policies, and future trends in the AI influencer space to adapt and innovate."
+          }
+        ]
+      },
+      {
+        id: "mod-ai-7",
+        courseId: "course-ai",
+        title: "Module 7: The UGC Brand Pitch Pipeline",
+        orderIndex: 7,
+        lessons: [
+          {
+            id: "les-ai-19",
+            moduleId: "mod-ai-7",
+            title: "Understanding AI-Powered UGC",
+            duration: "4:20",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 1,
+            bodyContent: "Differentiate between traditional UGC and AI-generated UGC, highlighting the advantages in terms of speed, cost, and testing efficiency for brands."
+          },
+          {
+            id: "les-ai-20",
+            moduleId: "mod-ai-7",
+            title: "Building Your AI UGC Portfolio",
+            duration: "4:45",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 2,
+            bodyContent: "Learn to create a compelling portfolio showcasing your AI influencer's UGC capabilities, focusing on quality, variety, and ease of review for potential brands. \"I’d rather have 6 good videos than 20 average ones.\""
+          },
+          {
+            id: "les-ai-21",
+            moduleId: "mod-ai-7",
+            title: "Proactive Brand Outreach & Pitching",
+            duration: "5:15",
+            videoUrl: "M7lc1UVf-VE",
+            orderIndex: 3,
+            bodyContent: "Master techniques for identifying target brands, finding key contacts, and crafting personalized pitches that highlight the value of AI-generated UGC. \"Proactive outreach beats platforms.\""
           }
         ]
       }

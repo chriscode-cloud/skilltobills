@@ -20,7 +20,7 @@ export interface Lesson {
   videoUrl: string; // YouTube Video ID or embed URL
   orderIndex: number;
   bodyContent: string;
-  resources: LessonResource[];
+  resources?: LessonResource[];
   quiz?: QuizQuestion;
 }
 

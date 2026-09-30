@@ -17,6 +17,11 @@ export const normalizeCourseSlug = (raw?: string): string => {
     
     "ai-influencer": "ai-virtual-influencers",
     "ai-influencers": "ai-virtual-influencers",
+    "ai-influncer": "ai-virtual-influencers",
+    "ai influncer": "ai-virtual-influencers",
+    "ai influencer": "ai-virtual-influencers",
+    "ai_influencer": "ai-virtual-influencers",
+    "ai_influncer": "ai-virtual-influencers",
     "virtual-influencer": "ai-virtual-influencers",
     "virtual-influencers": "ai-virtual-influencers",
     "course-ai-influencer": "ai-virtual-influencers",

@@ -198,10 +198,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           {currentUser ? (
             <button
               type="button"
-              onClick={onSignUpClick}
+              onClick={onLogout}
               className="bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-full transition-all cursor-pointer"
             >
-              LMS Dashboard &rarr;
+              Sign Out
             </button>
           ) : (
             <button

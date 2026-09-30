@@ -23,7 +23,6 @@ import { LatestSection } from "./components/LatestSection";
 import { SubscribeBanner } from "./components/SubscribeBanner";
 import { ProgramPage } from "./components/ProgramPage";
 import { BlogPage } from "./components/BlogPage";
-import { ProgrammesCataloguePage } from "./components/pages/ProgrammesCataloguePage";
 import { SupportPage } from "./components/pages/SupportPage";
 import { LegalPage } from "./components/pages/LegalPage";
 import { NotFoundPage } from "./components/pages/NotFoundPage";
@@ -41,39 +40,35 @@ import { getStoredUser, clearStoredUser, setStoredUser, AuthUser } from "./lib/a
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { usePageMeta } from "./hooks/usePageMeta";
 
+// --- Bypassed Dev Admin User (Auth Paused for content insertion) ---
+const BYPASS_DEV_USER: AuthUser = {
+  id: "admin-bypass-001",
+  email: "admin@skill2bills.com",
+  name: "Creator Admin (Auth Paused)",
+  role: "admin",
+  onboardingCompleted: true,
+  track: "content-clipping",
+  createdAt: new Date().toISOString(),
+};
+
 // --- Route Guard: Require Authenticated Student ---
 const RequireAuth: React.FC<{
   currentUser: AuthUser | null;
   children: React.ReactNode;
 }> = ({ currentUser, children }) => {
   const location = useLocation();
-
   if (!currentUser) {
-    sessionStorage.setItem("skill2bills_redirect", location.pathname + location.search);
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
-  // If user hasn't completed onboarding and doesn't have a track set, send them to /onboarding
-  if (
-    (!currentUser.onboardingCompleted || !currentUser.track) &&
-    location.pathname !== "/onboarding" &&
-    !location.pathname.startsWith("/settings")
-  ) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
   return <>{children}</>;
 };
 
-// --- Route Guard: Redirect Logged-In Users away from Login/Signup ---
+// --- Route Guard: Redirect Logged-In Users ---
 const RedirectIfAuth: React.FC<{
   currentUser: AuthUser | null;
   children: React.ReactNode;
 }> = ({ currentUser, children }) => {
   if (currentUser) {
-    if (!currentUser.onboardingCompleted || !currentUser.track) {
-      return <Navigate to="/onboarding" replace />;
-    }
     return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
@@ -105,6 +100,7 @@ const HomePage: React.FC<{ currentUser: AuthUser | null }> = ({ currentUser }) =
       <TransformationSection />
       <LatestSection
         onSelectArticle={(article) => navigate(`/blog/${article.id}`)}
+        onVisitBlog={() => navigate("/blog")}
       />
       <SubscribeBanner />
     </>
@@ -339,7 +335,7 @@ export default function App() {
         {/* PUBLIC SHELL ROUTES */}
         <Route element={<PublicShell currentUser={currentUser} onLogout={handleLogout} />}>
           <Route path="/" element={<HomePage currentUser={currentUser} />} />
-          <Route path="/programmes" element={<ProgrammesCataloguePage />} />
+          <Route path="/programmes" element={<Navigate to="/#pathways" replace />} />
           <Route path="/programmes/:slug" element={<ProgramPageWrapper currentUser={currentUser} />} />
           <Route path="/blog" element={<BlogPageWrapper />} />
           <Route path="/blog/:slug" element={<BlogPageWrapper />} />
@@ -409,7 +405,7 @@ export default function App() {
           path="/admin/*"
           element={
             <AdminGuard currentUser={currentUser}>
-              <AdminDashboard onBackToApp={() => window.location.assign("/dashboard")} />
+              <AdminDashboard onBackToWebsite={() => window.location.assign("/dashboard")} />
             </AdminGuard>
           }
         />

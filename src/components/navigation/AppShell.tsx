@@ -35,17 +35,19 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col md:flex-row font-sans selection:bg-[#D4F636] selection:text-black">
-      <LmsSidebar
-        currentTab={currentTab}
-        onSelectTab={handleSelectTab}
-        onExit={() => navigate("/")}
-        onLogout={handleUserLogout}
-        userEmail={currentUser.email}
-      />
-      <main className="flex-1 min-w-0 overflow-y-auto bg-black min-h-screen">
-        <Outlet />
-      </main>
+    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-[#D4F636] selection:text-black">
+      <div className="flex-1 flex flex-col md:flex-row min-w-0">
+        <LmsSidebar
+          currentTab={currentTab}
+          onSelectTab={handleSelectTab}
+          onExit={() => navigate("/")}
+          onLogout={handleUserLogout}
+          userEmail={currentUser.email}
+        />
+        <main className="flex-1 min-w-0 overflow-y-auto bg-black min-h-screen">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };

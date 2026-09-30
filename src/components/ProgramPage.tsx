@@ -33,28 +33,32 @@ export const ProgramPage: React.FC<ProgramPageProps> = ({ track, onBack, onEnrol
   // AI Influencer interactive curriculum modules
   const aiInfluencerModules: ModuleItem[] = [
     {
-      title: "Character Foundations (Beginner)",
-      description: "Choosing a character concept, niche, and audience before touching any tool  the step most beginners skip and regret later."
+      title: "Module 1: Foundations of AI Influencer Marketing",
+      description: "Explore the current landscape, ethical considerations, and the unique advantages AI influencers offer in the digital space, including the importance of disclosing AI generation to the audience."
     },
     {
-      title: "Building Visual Consistency",
-      description: "Using a prompt/no-prompt visual character builder (like Higgsfield's Soul ID approach) to lock in a consistent face/character across multiple images the single hardest technical problem in this space, tackled with current, beginner-friendly tools instead of manual prompt-engineering."
+      title: "Module 2: Advanced Character Design & Consistency",
+      description: "Master initial character generation using Midjourney (--cref parameter) or Leonardo.ai, focusing on achieving visually consistent facial geometry and styling across poses."
     },
     {
-      title: "From Image to Video",
-      description: "Turning your static character into short video content while keeping it recognizably the same character  covering what actually causes \"drift\" between generations and how to avoid it."
+      title: "Module 3: Dynamic Content Creation",
+      description: "Learn to transform static images into dynamic video clips using Kling AI and Runway Gen-3, and integrate ElevenLabs voices with precise lip-sync using Hedra or HeyGen."
     },
     {
-      title: "Brand Voice & Content Calendar",
-      description: "Defining a personality and posting rhythm  the part that separates a \"generated image\" from an actual creator brand."
+      title: "Module 4: Audience Engagement & Platform Strategy",
+      description: "Strategize content distribution across Instagram, TikTok, and Facebook, and develop compelling storylines that resonate and drive community interaction."
     },
     {
-      title: "Pitching to Brands",
-      description: "How virtual creators and their teams actually approach brand partnerships deck structure, what brands look for, and realistic expectations (not every character lands a deal, and that's normal)."
+      title: "Module 5: Monetization & Business Acumen",
+      description: "Explore monetization on platforms like Fanvue, pitch brands for paid sponsorships, and diversify income streams with AI product photography."
     },
     {
-      title: "Platform Policy & AI Disclosure",
-      description: "What platforms currently require for labeling AI-generated content, and why transparency protects you long-term as policy in this space keeps evolving."
+      title: "Module 6: Analytics, Optimization & Future Trends",
+      description: "Monitor engagement metrics to iterate content creation with data-driven A/B testing and keep up with emerging AI tools."
+    },
+    {
+      title: "Module 7: The UGC Brand Pitch Pipeline",
+      description: "Differentiate AI-generated UGC, build a high-converting UGC portfolio, and master proactive brand outreach techniques to land paid partnerships."
     }
   ];
 

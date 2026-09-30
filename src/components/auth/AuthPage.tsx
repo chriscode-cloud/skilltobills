@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { BrandLogo } from "../BrandLogo";
 import { supabase, isSupabaseConfigured } from "../../lib/supabase";
 import { setStoredUser, AuthUser } from "../../lib/auth";
@@ -25,7 +25,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otpCode, setOtpCode] = useState("");
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -129,7 +129,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         const { error } = await supabase.auth.signInWithOtp({
           email: normalizedEmail,
           options: {
-            shouldCreateUser: mode === "signup",
+            shouldCreateUser: true,
             emailRedirectTo: `${window.location.origin}/dashboard`,
             data: {
               full_name: name.trim() || undefined,
@@ -156,11 +156,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   // 3. Verify OTP
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = otp.join("").trim();
+    const token = otpCode.replace(/\D/g, "").trim();
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (token.length !== 6) {
-      setErrorMessage("Please enter all 6 digits of the verification code.");
+    if (token.length < 6) {
+      setErrorMessage("Please enter your verification code (6 to 8 digits).");
       return;
     }
 
@@ -238,27 +238,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     }
   };
 
-  const handleOtpInput = (index: number, val: string) => {
-    if (val.length > 1) {
-      const digits = val.replace(/\D/g, "").slice(0, 6).split("");
-      const nextOtp = [...otp];
-      for (let i = 0; i < 6; i++) {
-        nextOtp[i] = digits[i] || "";
-      }
-      setOtp(nextOtp);
-      const nextFocus = Math.min(digits.length, 5);
-      document.getElementById(`otp-input-${nextFocus}`)?.focus();
-      return;
-    }
 
-    const nextOtp = [...otp];
-    nextOtp[index] = val;
-    setOtp(nextOtp);
-
-    if (val && index < 5) {
-      document.getElementById(`otp-input-${index + 1}`)?.focus();
-    }
-  };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col justify-center items-center px-4 py-8 sm:py-12 relative overflow-hidden">
@@ -463,36 +443,37 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
               </button>
             </form>
           ) : (
-            /* Step B: 6-Digit OTP Code Verification */
+            /* Step B: Verification Code Entry with Direct Paste Support */
             <form onSubmit={handleVerifyOtp} className="space-y-5">
               <div>
                 <label className="block text-xs font-bold text-zinc-400 mb-2 text-center">
-                  Enter 6-Digit Verification Code
+                  Enter or Paste Verification Code
                 </label>
-                <div className="flex items-center justify-center gap-2 sm:gap-2.5">
-                  {otp.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      id={`otp-input-${idx}`}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpInput(idx, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Backspace" && !digit && idx > 0) {
-                          document.getElementById(`otp-input-${idx - 1}`)?.focus();
-                        }
-                      }}
-                      className="w-10 h-12 sm:w-12 sm:h-14 text-center font-mono font-extrabold text-lg sm:text-xl rounded-xl bg-zinc-900 border border-zinc-800 text-white focus:border-[#D4F636] focus:ring-2 focus:ring-[#D4F636]/30 outline-none transition-all"
-                    />
-                  ))}
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text").replace(/\D/g, "").trim();
+                      if (pasted) {
+                        setOtpCode(pasted.slice(0, 8));
+                      }
+                    }}
+                    placeholder="Paste 6 or 8-digit code"
+                    className="w-full text-center font-mono font-black text-2xl tracking-[6px] sm:tracking-[10px] py-4 px-4 rounded-xl bg-zinc-900 border border-zinc-800 text-[#D4F636] focus:border-[#D4F636] focus:ring-2 focus:ring-[#D4F636]/30 outline-none transition-all placeholder:text-zinc-600 placeholder:text-sm placeholder:font-normal placeholder:tracking-normal"
+                  />
                 </div>
+                <p className="text-[11px] text-zinc-500 text-center mt-2">
+                  💡 Tip: You can paste (`Ctrl+V` / `Cmd+V`) your code directly into the box above.
+                </p>
               </div>
 
               <button
                 type="submit"
-                disabled={loading || otp.join("").length !== 6}
+                disabled={loading || otpCode.replace(/\D/g, "").length < 6}
                 className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-md"
               >
                 {loading ? (
@@ -513,7 +494,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                   type="button"
                   onClick={() => {
                     setIsOtpSent(false);
-                    setOtp(["", "", "", "", "", ""]);
+                    setOtpCode("");
                   }}
                   className="hover:text-white transition-colors cursor-pointer"
                 >

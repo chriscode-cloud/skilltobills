@@ -62,11 +62,13 @@ export const COURSE_TRACKS: CourseTrack[] = [
     difficulty: "Beginner to Pro",
     studentsCount: "14,820 enrolled",
     curriculum: [
-      "Midjourney & Flux Hyper-Realistic Face Consistency",
-      "Setting up Monetized Fanvue & Instagram Creator Funnels",
-      "Automated Chatting & Direct Message AI Assistants",
-      "Brand Sponsorship Pitching for Virtual Ambassadors",
-      "Legal Compliance & AI Disclosures for Maximum Longevity"
+      "Module 1: Foundations of AI Influencer Marketing (Persona, Landscape & Disclosures)",
+      "Module 2: Advanced Character Design, Face Reference & Visual Consistency",
+      "Module 3: Dynamic Content Creation (Kling/Runway Animation & Voice Lip-Sync)",
+      "Module 4: Audience Engagement, Narrative Building & Multi-Platform Strategy",
+      "Module 5: Monetization (Direct Fan Subscriptions, Chat Messaging & Brand Deals)",
+      "Module 6: Analytics, Optimization, A/B Testing & Future Tech Trends",
+      "Module 7: The AI-Powered UGC Brand Pitch Portfolio & Outreach Pipeline"
     ],
     keyTools: [
       "Higgsfield AI Influencer Studio",
