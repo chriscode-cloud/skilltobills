@@ -31,7 +31,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
 
   const handleUserLogout = async () => {
     await onLogout();
-    navigate("/signup", { replace: true });
+    navigate("/login", { replace: true });
   };
 
   return (

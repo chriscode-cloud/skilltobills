@@ -40,17 +40,6 @@ import { getStoredUser, clearStoredUser, setStoredUser, AuthUser } from "./lib/a
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { usePageMeta } from "./hooks/usePageMeta";
 
-// --- Bypassed Dev Admin User (Auth Paused for content insertion) ---
-const BYPASS_DEV_USER: AuthUser = {
-  id: "admin-bypass-001",
-  email: "admin@skill2bills.com",
-  name: "Creator Admin (Auth Paused)",
-  role: "admin",
-  onboardingCompleted: true,
-  track: "content-clipping",
-  createdAt: new Date().toISOString(),
-};
-
 // --- Route Guard: Require Authenticated Student ---
 const RequireAuth: React.FC<{
   currentUser: AuthUser | null;
@@ -324,7 +313,7 @@ export default function App() {
     }
     clearStoredUser();
     setCurrentUser(null);
-    window.location.assign("/signup");
+    window.location.assign("/login");
   };
 
   return (
@@ -346,6 +335,8 @@ export default function App() {
         </Route>
 
         {/* AUTH ROUTES (Redirects to dashboard if already authenticated) */}
+        <Route path="/auth" element={<Navigate to="/login" replace />} />
+        <Route path="/authpage" element={<Navigate to="/login" replace />} />
         <Route
           path="/login"
           element={

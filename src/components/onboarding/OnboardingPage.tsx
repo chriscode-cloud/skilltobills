@@ -118,6 +118,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ currentUser }) =
       } catch (err) {
         console.warn("Could not save onboarding to Supabase:", err);
       }
+      window.dispatchEvent(new CustomEvent("skill2bills_profile_updated", { detail: { id: currentUser.id } }));
     }
 
     setSaving(false);

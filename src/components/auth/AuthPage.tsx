@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { BrandLogo } from "../BrandLogo";
-import { supabase, isSupabaseConfigured } from "../../lib/supabase";
+import { supabase, isSupabaseConfigured, setCustomSupabaseCredentials, clearCustomSupabaseCredentials } from "../../lib/supabase";
 import { setStoredUser, AuthUser } from "../../lib/auth";
 import { usePageMeta } from "../../hooks/usePageMeta";
 import { ImageSlider } from "@/components/ui/image-slider";
@@ -30,6 +30,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
+
+  const [showSupaConfig, setShowSupaConfig] = useState(false);
+  const [supaUrlInput, setSupaUrlInput] = useState("");
+  const [supaKeyInput, setSupaKeyInput] = useState("");
 
   usePageMeta(
     mode === "signup" ? "Create Your Account" : "Sign In to Skill2Bills",
@@ -103,49 +107,67 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
       return;
     }
 
+    if (!isSupabaseConfigured || !supabase) {
+      setErrorMessage("Authentication service is unavailable. Please check your Supabase configuration.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (isSupabaseConfigured && supabase) {
-        // Check for duplicate account on Sign Up
-        const { data: existingProfile } = await supabase
-          .from("profiles")
-          .select("id, email, onboarding_completed")
-          .eq("email", normalizedEmail)
-          .maybeSingle();
+      // Check for duplicate account on Sign Up
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id, email, onboarding_completed")
+        .eq("email", normalizedEmail)
+        .maybeSingle();
 
-        if (mode === "signup" && existingProfile) {
-          setErrorMessage("An account with this email address already exists. Please sign in instead.");
-          setLoading(false);
-          return;
-        }
-
-        if (mode === "login" && !existingProfile) {
-          setErrorMessage("No account found with this email. Please sign up to create a new account.");
-          setLoading(false);
-          return;
-        }
-
-        const { error } = await supabase.auth.signInWithOtp({
-          email: normalizedEmail,
-          options: {
-            shouldCreateUser: true,
-            emailRedirectTo: `${window.location.origin}/dashboard`,
-            data: {
-              full_name: name.trim() || undefined,
-            },
-          },
-        });
-
-        if (error) throw error;
-
-        setIsOtpSent(true);
-        setInfoMessage(`We sent a magic sign-in link and verification code to ${normalizedEmail}. Click the link in your email to sign in instantly, or enter your 6-digit code below!`);
-      } else {
-        // Safe offline simulated login for development
-        setIsOtpSent(true);
-        setInfoMessage(`Development mode: Use code 123456 to continue.`);
+      if (mode === "signup" && existingProfile) {
+        setErrorMessage("An account with this email address already exists. Please sign in instead.");
+        setLoading(false);
+        return;
       }
+
+      if (mode === "login" && !existingProfile) {
+        setErrorMessage("No account found with this email. Please sign up to create a new account.");
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: {
+            full_name: name.trim() || undefined,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      if (mode === "signup") {
+        try {
+          await supabase.from("profiles").upsert(
+            {
+              email: normalizedEmail,
+              name: name.trim() || normalizedEmail.split("@")[0],
+              role: "student",
+              onboarding_completed: false,
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: "email", ignoreDuplicates: true }
+          );
+        } catch {
+          // If RLS prevents anon insert, it will be finalized upon verifyOtp
+        }
+        window.dispatchEvent(new CustomEvent("skill2bills_profile_updated", { detail: { email: normalizedEmail } }));
+      }
+
+      setIsOtpSent(true);
+      setInfoMessage(`We sent a magic sign-in link and verification code to ${normalizedEmail}. Click the link in your email to sign in instantly, or enter your 8-digit code below!`);
     } catch (err: any) {
       setErrorMessage(err?.message || "Failed to send verification code. Please try again.");
     } finally {
@@ -160,7 +182,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     const normalizedEmail = email.trim().toLowerCase();
 
     if (token.length < 6) {
-      setErrorMessage("Please enter your verification code (6 to 8 digits).");
+      setErrorMessage("Please enter your 8-digit verification code.");
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      setErrorMessage("Authentication service is unavailable. Please check your Supabase configuration.");
       return;
     }
 
@@ -168,68 +195,54 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     setErrorMessage("");
 
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.verifyOtp({
-          email: normalizedEmail,
-          token,
-          type: "email",
-        });
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token,
+        type: "email",
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        if (data.user) {
-          // Fetch existing profile to preserve onboarding completed & track status
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", data.user.id)
-            .maybeSingle();
+      if (data.user) {
+        // Fetch existing profile to preserve onboarding completed & track status
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", data.user.id)
+          .maybeSingle();
 
-          // Ensure profile row exists
-          if (!profile) {
-            try {
-              await supabase.from("profiles").upsert({
-                id: data.user.id,
-                email: normalizedEmail,
-                name: name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
-                role: "student",
-                onboarding_completed: false,
-                created_at: new Date().toISOString(),
-              });
-            } catch {
-              // ignore
-            }
+        // Ensure profile row exists
+        if (!profile) {
+          try {
+            await supabase.from("profiles").upsert({
+              id: data.user.id,
+              email: normalizedEmail,
+              name: name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
+              role: "student",
+              onboarding_completed: false,
+              created_at: new Date().toISOString(),
+            });
+          } catch {
+            // ignore
           }
-
-          const isCompleted = profile ? Boolean(profile.onboarding_completed) : false;
-          const userTrack = profile?.track && profile.track !== "none" ? profile.track : undefined;
-
-          const authUser: AuthUser = {
-            id: data.user.id,
-            email: data.user.email || normalizedEmail,
-            name: profile?.name || name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
-            role: (profile?.role as any) || "student",
-            onboardingCompleted: isCompleted,
-            track: userTrack,
-            createdAt: data.user.created_at,
-          };
-
-          setStoredUser(authUser);
-          navigate(getDestination(authUser), { replace: true });
         }
-      } else {
-        // Offline development fallback
-        const devUser: AuthUser = {
-          id: `dev-${Date.now()}`,
-          email: normalizedEmail,
-          name: name.trim() || normalizedEmail.split("@")[0],
-          role: "student",
-          onboardingCompleted: mode === "login",
-          track: mode === "login" ? "content-clipping" : undefined,
-          createdAt: new Date().toISOString(),
+
+        const isCompleted = profile ? Boolean(profile.onboarding_completed) : false;
+        const userTrack = profile?.track && profile.track !== "none" ? profile.track : undefined;
+
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: data.user.email || normalizedEmail,
+          name: profile?.name || name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
+          role: (profile?.role as any) || "student",
+          onboardingCompleted: isCompleted,
+          track: userTrack,
+          createdAt: data.user.created_at,
         };
-        setStoredUser(devUser);
-        navigate(getDestination(devUser), { replace: true });
+
+        setStoredUser(authUser);
+        window.dispatchEvent(new CustomEvent("skill2bills_profile_updated", { detail: authUser }));
+        navigate(getDestination(authUser), { replace: true });
       }
     } catch (err: any) {
       setErrorMessage(err?.message || "Invalid or expired code. Please request a new one.");
@@ -366,7 +379,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
               <div className="flex items-center gap-3 my-4">
                 <div className="flex-1 h-px bg-zinc-800" />
                 <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                  Or with Email OTP
+                  Or with Email
                 </span>
                 <div className="flex-1 h-px bg-zinc-800" />
               </div>
@@ -432,11 +445,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Sending Verification Code...</span>
+                    <span>{mode === "signup" ? "Creating Account..." : "Signing In..."}</span>
                   </>
                 ) : (
                   <>
-                    <span>{mode === "signup" ? "Create Account & Send Code" : "Send 6-Digit Code"}</span>
+                    <span>{mode === "signup" ? "Create Account" : "Sign In"}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -447,7 +460,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
             <form onSubmit={handleVerifyOtp} className="space-y-5">
               <div>
                 <label className="block text-xs font-bold text-zinc-400 mb-2 text-center">
-                  Enter or Paste Verification Code
+                  Enter Verification Code
                 </label>
                 <div className="relative">
                   <input
@@ -462,13 +475,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                         setOtpCode(pasted.slice(0, 8));
                       }
                     }}
-                    placeholder="Paste 6 or 8-digit code"
+                    placeholder="Enter 8-digit code"
                     className="w-full text-center font-mono font-black text-2xl tracking-[6px] sm:tracking-[10px] py-4 px-4 rounded-xl bg-zinc-900 border border-zinc-800 text-[#D4F636] focus:border-[#D4F636] focus:ring-2 focus:ring-[#D4F636]/30 outline-none transition-all placeholder:text-zinc-600 placeholder:text-sm placeholder:font-normal placeholder:tracking-normal"
                   />
                 </div>
-                <p className="text-[11px] text-zinc-500 text-center mt-2">
-                  💡 Tip: You can paste (`Ctrl+V` / `Cmd+V`) your code directly into the box above.
-                </p>
               </div>
 
               <button

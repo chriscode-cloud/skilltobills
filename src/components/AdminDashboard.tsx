@@ -34,6 +34,7 @@ import {
   getAllProfiles,
   SupabaseProfile,
   isSupabaseConfigured,
+  supabase,
   supabaseUrl,
   supabaseAnonKey,
   setCustomSupabaseCredentials,
@@ -65,27 +66,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
   const [newExp, setNewExp] = useState("Beginner");
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  // Load actual profiles
-  const fetchProfiles = async () => {
-    setLoading(true);
-    try {
-      const data = await getAllProfiles();
-      setProfiles(data);
-    } catch (err) {
-      console.error("Failed to load profiles in admin:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfiles();
-  }, []);
-
   const triggerNotice = (msg: string) => {
     setActionNotice(msg);
     setTimeout(() => setActionNotice(null), 3500);
   };
+
+  // Load actual profiles with silent background refresh support
+  const fetchProfiles = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const data = await getAllProfiles();
+      setProfiles((prev) => {
+        if (prev.length > 0 && data.length > prev.length) {
+          triggerNotice(`🎉 New creator signup recorded! (${data.length} total)`);
+        }
+        return data;
+      });
+    } catch (err) {
+      console.error("Failed to load profiles in admin:", err);
+    } finally {
+      if (showSpinner) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfiles(true);
+
+    // 1. Live Supabase Realtime channel subscription on 'profiles' table
+    let channel: any = null;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        channel = supabase
+          .channel("realtime-admin-profiles-sync")
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "profiles",
+            },
+            (payload) => {
+              console.log("Supabase Realtime profile change detected:", payload);
+              fetchProfiles(false);
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn("Realtime subscription error:", err);
+      }
+    }
+
+    // 2. Local broadcast listener for instant cross-tab & component updates
+    const handleLocalUpdate = () => {
+      fetchProfiles(false);
+    };
+    window.addEventListener("skill2bills_profile_updated", handleLocalUpdate);
+    window.addEventListener("skill2bills_auth_changed", handleLocalUpdate);
+    window.addEventListener("storage", handleLocalUpdate);
+
+    // 3. Fast auto-poll fallback (every 3.5s) to guarantee instant updates
+    const pollTimer = setInterval(() => {
+      fetchProfiles(false);
+    }, 3500);
+
+    return () => {
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+      window.removeEventListener("skill2bills_profile_updated", handleLocalUpdate);
+      window.removeEventListener("skill2bills_auth_changed", handleLocalUpdate);
+      window.removeEventListener("storage", handleLocalUpdate);
+      clearInterval(pollTimer);
+    };
+  }, []);
 
   // Compute live analytics from real profiles
   const analytics = useMemo(() => {
@@ -445,6 +498,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
 
             {/* Right controls */}
             <div className="flex items-center gap-3 self-end sm:self-auto">
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-bold text-emerald-700 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Live Realtime Active</span>
+              </div>
+
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -458,7 +516,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
 
               <button
                 type="button"
-                onClick={fetchProfiles}
+                onClick={() => fetchProfiles(true)}
                 title="Refresh Real Signups"
                 className="p-2.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 hover:text-black hover:bg-slate-200 transition-colors cursor-pointer"
               >
