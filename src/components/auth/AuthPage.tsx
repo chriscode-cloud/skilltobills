@@ -133,7 +133,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         isLoginMode ? "/dashboard" : "/onboarding"
       );
 
-      const { error } = await supabase.auth.signInWithOtp({
+      // 1. Try sending with targeted route redirect
+      let { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
           shouldCreateUser: !isLoginMode,
@@ -145,6 +146,35 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
           },
         },
       });
+
+      // 2. Fallback: If subpath rejected (missing /** wildcard), retry with root origin
+      if (error && (error.message.toLowerCase().includes("magic link") || error.message.toLowerCase().includes("redirect"))) {
+        const retryRoot = await supabase.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: {
+            shouldCreateUser: !isLoginMode,
+            emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              full_name: name.trim() || undefined,
+            },
+          },
+        });
+        error = retryRoot.error;
+      }
+
+      // 3. Fallback: If still rejected, omit emailRedirectTo so Supabase uses default Site URL
+      if (error && (error.message.toLowerCase().includes("magic link") || error.message.toLowerCase().includes("redirect"))) {
+        const retrySiteUrl = await supabase.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: {
+            shouldCreateUser: !isLoginMode,
+            data: {
+              full_name: name.trim() || undefined,
+            },
+          },
+        });
+        error = retrySiteUrl.error;
+      }
 
       if (error) {
         const msg = (error.message || "").toLowerCase();
@@ -160,6 +190,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
           setLoading(false);
           return;
         }
+
+        if (msg.includes("rate limit") || msg.includes("over_email_send_rate_limit")) {
+          setErrorMessage(
+            "Supabase email rate limit reached (free tier allows 3 emails/hr). Please wait a few minutes or add a custom SMTP provider in your Supabase dashboard."
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (msg.includes("magic link")) {
+          setErrorMessage(
+            "Supabase could not send the email. Ensure your Vercel domain is added in Supabase Dashboard -> Authentication -> URL Configuration -> Redirect URLs."
+          );
+          setLoading(false);
+          return;
+        }
+
         throw error;
       }
 
