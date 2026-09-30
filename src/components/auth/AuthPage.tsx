@@ -42,7 +42,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
 
   // Retrieve post-login destination
   const getDestination = (user?: AuthUser) => {
-    // If user hasn't selected a track or finished onboarding, force /onboarding
+    // Logging in means the user already has an account: take them straight to dashboard!
+    if (mode === "login") {
+      return "/dashboard";
+    }
+    // For sign up: if user hasn't selected a track or finished onboarding, route to /onboarding
     if (user && (!user.onboardingCompleted || !user.track)) {
       return "/onboarding";
     }
@@ -64,7 +68,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         throw new Error("Supabase is not configured yet.");
       }
 
-      const redirectUri = `${window.location.origin}/dashboard`;
+      // If user is logging in, they already have an account and should land on /dashboard
+      // If signing up, target /onboarding
+      const targetRoute = mode === "login" ? "/dashboard" : "/onboarding";
+      localStorage.setItem("skill2bills_target_after_auth", targetRoute);
+
+      const redirectUri = `${window.location.origin}${targetRoute}`;
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -89,7 +98,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     }
   };
 
-  // 2. Send 6-digit OTP to Email
+  // 2. Send 8-digit OTP to Email
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -116,37 +125,43 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     setLoading(true);
 
     try {
-      // Check for duplicate account on Sign Up
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id, email, onboarding_completed")
-        .eq("email", normalizedEmail)
-        .maybeSingle();
+      const isLoginMode = mode === "login";
 
-      if (mode === "signup" && existingProfile) {
-        setErrorMessage("An account with this email address already exists. Please sign in instead.");
-        setLoading(false);
-        return;
-      }
-
-      if (mode === "login" && !existingProfile) {
-        setErrorMessage("No account found with this email. Please sign up to create a new account.");
-        setLoading(false);
-        return;
-      }
+      // Mark the target destination for when user returns / verifies
+      localStorage.setItem(
+        "skill2bills_target_after_auth",
+        isLoginMode ? "/dashboard" : "/onboarding"
+      );
 
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
-          shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          shouldCreateUser: !isLoginMode,
+          emailRedirectTo: isLoginMode
+            ? `${window.location.origin}/dashboard`
+            : `${window.location.origin}/onboarding`,
           data: {
             full_name: name.trim() || undefined,
           },
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        const msg = (error.message || "").toLowerCase();
+        if (
+          msg.includes("signups not allowed") ||
+          msg.includes("user not found") ||
+          msg.includes("not registered") ||
+          msg.includes("invalid login credentials")
+        ) {
+          setErrorMessage(
+            "No account found with this email. Please click 'Create Account' above to sign up first."
+          );
+          setLoading(false);
+          return;
+        }
+        throw error;
+      }
 
       if (mode === "signup") {
         try {
@@ -219,7 +234,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
               email: normalizedEmail,
               name: name.trim() || data.user.user_metadata?.full_name || normalizedEmail.split("@")[0],
               role: "student",
-              onboarding_completed: false,
+              onboarding_completed: mode === "login" ? true : false,
               created_at: new Date().toISOString(),
             });
           } catch {
@@ -227,8 +242,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
           }
         }
 
-        const isCompleted = profile ? Boolean(profile.onboarding_completed) : false;
-        const userTrack = profile?.track && profile.track !== "none" ? profile.track : undefined;
+        // If user logged in, mark onboarding as completed so they directly access dashboard
+        const isCompleted = mode === "login" ? true : profile ? Boolean(profile.onboarding_completed) : false;
+        const userTrack = profile?.track && profile.track !== "none" ? profile.track : "content-clipping";
+
+        if (mode === "login" && profile && !profile.onboarding_completed) {
+          try {
+            await supabase.from("profiles").update({ onboarding_completed: true }).eq("id", data.user.id);
+          } catch {
+            // ignore
+          }
+        }
 
         const authUser: AuthUser = {
           id: data.user.id,

@@ -266,8 +266,26 @@ export default function App() {
               .maybeSingle();
 
             const rawMeta = session.user.user_metadata || {};
+
+            // Ensure profile exists for Google / OAuth signups
+            if (!profile) {
+              try {
+                await supabase.from("profiles").upsert({
+                  id: session.user.id,
+                  email: session.user.email || "",
+                  name: rawMeta.full_name || rawMeta.name || session.user.email?.split("@")[0] || "Creator",
+                  role: "student",
+                  onboarding_completed: false,
+                  avatar_url: rawMeta.avatar_url || rawMeta.picture,
+                  created_at: new Date().toISOString(),
+                });
+              } catch (e) {
+                console.warn("Failed to create profile row on OAuth sign-in:", e);
+              }
+            }
+
             const isCompleted = profile ? Boolean(profile.onboarding_completed) : false;
-            const userTrack = profile?.track && profile.track !== "none" ? profile.track : "content-clipping";
+            const userTrack = profile?.track && profile.track !== "none" ? profile.track : undefined;
 
             const authUser: AuthUser = {
               id: session.user.id,
@@ -283,9 +301,25 @@ export default function App() {
             setStoredUser(authUser);
             setCurrentUser(authUser);
 
-            // Clean hash parameters if returning from magic link redirect
+            // Clean hash parameters if returning from OAuth / magic link redirect
             if (window.location.hash.includes("access_token")) {
               window.history.replaceState(null, "", window.location.pathname);
+            }
+
+            // Route user based on intention:
+            // - Login users or returning students go straight to /dashboard
+            // - Only newly signing up users who have not completed onboarding go to /onboarding
+            const pendingTarget = localStorage.getItem("skill2bills_target_after_auth");
+            localStorage.removeItem("skill2bills_target_after_auth");
+
+            if (pendingTarget === "/dashboard") {
+              if (window.location.pathname !== "/dashboard") {
+                window.location.assign("/dashboard");
+              }
+            } else if (pendingTarget === "/onboarding" && !isCompleted) {
+              if (window.location.pathname !== "/onboarding") {
+                window.location.assign("/onboarding");
+              }
             }
           } else if (event === "SIGNED_OUT") {
             clearStoredUser();
