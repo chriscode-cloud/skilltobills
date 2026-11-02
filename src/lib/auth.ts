@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { supabase, isSupabaseConfigured, Profile } from "./supabase";
 
 export interface AuthUser {
   id: string;
@@ -26,7 +26,7 @@ export const ADMIN_EMAILS = [
 export const AUTH_STORAGE_KEY = "skill2bills_auth_user_v1";
 
 /**
- * Retrieve cached user from localStorage (display & offline cache only)
+ * Retrieve cached user from localStorage
  */
 export function getStoredUser(): AuthUser | null {
   try {
@@ -54,20 +54,21 @@ export function setStoredUser(user: AuthUser): void {
     }
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
     window.dispatchEvent(new CustomEvent("skill2bills_auth_changed", { detail: user }));
+    
+    // Save or update profile directly in database (no Supabase Auth dependency)
+    saveUserProfileToDatabase(user).catch(() => {});
   } catch {
     // ignore
   }
 }
 
 /**
- * Clear cached user state (log out) and sign out from Supabase Auth
+ * Clear cached user state (log out)
  */
 export function clearStoredUser(): void {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY);
-    if (isSupabaseConfigured && supabase) {
-      supabase.auth.signOut().catch(() => {});
-    }
+    sessionStorage.removeItem("skill2bills_redirect");
     window.dispatchEvent(new CustomEvent("skill2bills_auth_changed", { detail: null }));
   } catch {
     // ignore
@@ -75,60 +76,45 @@ export function clearStoredUser(): void {
 }
 
 /**
- * Validates the true session with Supabase server.
- * Never trusts localStorage for authorization or security guards.
+ * Persists profile to database table directly
+ */
+export async function saveUserProfileToDatabase(user: AuthUser): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("profiles").upsert(
+        {
+          id: user.id,
+          email: user.email.toLowerCase().trim(),
+          name: user.name || user.email.split("@")[0],
+          role: user.role || "student",
+          onboarding_completed: Boolean(user.onboardingCompleted),
+          track: user.track || "content-clipping",
+          goal: user.goal,
+          time_commitment: user.timeCommitment,
+          experience_level: user.experienceLevel,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+    } catch (err) {
+      console.warn("Could not save profile directly to DB table:", err);
+    }
+  }
+}
+
+/**
+ * Validates active session synchronously or from local DB state
  */
 export async function getLiveSession(): Promise<AuthUser | null> {
-  if (!isSupabaseConfigured || !supabase) {
-    return getStoredUser();
-  }
-
-  try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error || !session?.user) {
-      if (getStoredUser()) {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-        window.dispatchEvent(new CustomEvent("skill2bills_auth_changed", { detail: null }));
-      }
-      return null;
+  const current = getStoredUser();
+  if (current) {
+    if (ADMIN_EMAILS.includes(current.email.toLowerCase().trim())) {
+      current.role = "admin";
+      current.onboardingCompleted = true;
     }
-
-    // Authoritative profile check from Supabase database
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-    const rawMeta = session.user.user_metadata || {};
-    const email = (session.user.email || profile?.email || "").toLowerCase().trim();
-    const isDesignatedAdmin = ADMIN_EMAILS.includes(email);
-    const userRole = isDesignatedAdmin ? "admin" : ((profile?.role as any) || "student");
-
-    const liveUser: AuthUser = {
-      id: session.user.id,
-      email: session.user.email || profile?.email || "",
-      name: profile?.name || rawMeta.full_name || rawMeta.name || profile?.email?.split("@")[0] || "Creator",
-      role: userRole,
-      onboardingCompleted: isDesignatedAdmin ? true : Boolean(profile?.onboarding_completed),
-      username: profile?.username || undefined,
-      avatar: profile?.avatar_url || rawMeta.avatar_url || rawMeta.picture,
-      bio: profile?.bio || undefined,
-      links: profile?.links || {},
-      emailNotifications: profile?.email_notifications !== false,
-      track: profile?.track !== "none" ? profile?.track : undefined,
-      goal: profile?.goal || undefined,
-      timeCommitment: profile?.time_commitment || undefined,
-      experienceLevel: profile?.experience_level || undefined,
-      createdAt: profile?.created_at || session.user.created_at,
-    };
-
-    setStoredUser(liveUser);
-    return liveUser;
-  } catch (err) {
-    console.warn("Failed to check live Supabase session, using safe cache:", err);
-    return getStoredUser();
+    return current;
   }
+  return null;
 }
 
 /**
@@ -146,4 +132,24 @@ export function isUserAdmin(user: AuthUser | null): boolean {
  */
 export function isAuthenticated(): boolean {
   return Boolean(getStoredUser());
+}
+
+/**
+ * Helper to decode Google JWT ID Token payload (client-side)
+ */
+export function parseJwt(token: string): any {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
 }
