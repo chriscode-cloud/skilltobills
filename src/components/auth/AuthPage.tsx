@@ -133,38 +133,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         isLoginMode ? "/dashboard" : "/onboarding"
       );
 
-      // 1. Try sending with targeted route redirect
+      // 1. Send OTP request to Supabase
       let { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
           shouldCreateUser: !isLoginMode,
-          emailRedirectTo: isLoginMode
-            ? `${window.location.origin}/dashboard`
-            : `${window.location.origin}/onboarding`,
+          emailRedirectTo: `${window.location.origin}${isLoginMode ? "/dashboard" : "/onboarding"}`,
           data: {
             full_name: name.trim() || undefined,
           },
         },
       });
 
-      // 2. Fallback: If subpath rejected (missing /** wildcard), retry with root origin
-      if (error && (error.message.toLowerCase().includes("magic link") || error.message.toLowerCase().includes("redirect"))) {
-        const retryRoot = await supabase.auth.signInWithOtp({
-          email: normalizedEmail,
-          options: {
-            shouldCreateUser: !isLoginMode,
-            emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              full_name: name.trim() || undefined,
-            },
-          },
-        });
-        error = retryRoot.error;
-      }
-
-      // 3. Fallback: If still rejected, omit emailRedirectTo so Supabase uses default Site URL
-      if (error && (error.message.toLowerCase().includes("magic link") || error.message.toLowerCase().includes("redirect"))) {
-        const retrySiteUrl = await supabase.auth.signInWithOtp({
+      // 2. Fallback: If domain redirect is unconfigured or rejected by Supabase, retry without emailRedirectTo
+      if (
+        error &&
+        (error.message.toLowerCase().includes("redirect") ||
+          error.message.toLowerCase().includes("not allowed") ||
+          error.message.toLowerCase().includes("url") ||
+          error.message.toLowerCase().includes("magic link"))
+      ) {
+        const retry = await supabase.auth.signInWithOtp({
           email: normalizedEmail,
           options: {
             shouldCreateUser: !isLoginMode,
@@ -173,7 +162,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
             },
           },
         });
-        error = retrySiteUrl.error;
+        error = retry.error;
       }
 
       if (error) {
@@ -191,23 +180,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
           return;
         }
 
-        if (msg.includes("rate limit") || msg.includes("over_email_send_rate_limit")) {
+        if (
+          msg.includes("rate limit") ||
+          msg.includes("over_email_send_rate_limit") ||
+          msg.includes("too many requests") ||
+          msg.includes("exceeded")
+        ) {
           setErrorMessage(
-            "Supabase email rate limit reached (free tier allows 3 emails/hr). Please wait a few minutes or add a custom SMTP provider in your Supabase dashboard."
+            "Supabase default email rate limit reached (free tier allows 3 emails/hour). Please wait a few minutes, or click 'Continue with Google' above to sign in instantly!"
           );
           setLoading(false);
           return;
         }
 
-        if (msg.includes("magic link")) {
+        if (msg.includes("sending magic link") || msg.includes("confirmation mail") || msg.includes("error sending")) {
           setErrorMessage(
-            "Supabase could not send the email. Ensure your Vercel domain is added in Supabase Dashboard -> Authentication -> URL Configuration -> Redirect URLs."
+            "Supabase could not dispatch the email. You may have hit the 3 emails/hour limit on Supabase's default mailer. Please try signing in with Google above or wait a few minutes."
           );
           setLoading(false);
           return;
         }
 
-        throw error;
+        setErrorMessage(error.message || "Failed to send verification code. Please try again.");
+        setLoading(false);
+        return;
       }
 
       if (mode === "signup") {

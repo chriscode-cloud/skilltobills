@@ -158,13 +158,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           return;
         }
 
-        const { error } = await supabase.auth.signInWithOtp({
+        let { error } = await supabase.auth.signInWithOtp({
           email: cleanEmail,
           options: {
             shouldCreateUser: activeTab === "register",
             emailRedirectTo: window.location.origin,
           },
         });
+
+        if (
+          error &&
+          (error.message.toLowerCase().includes("redirect") ||
+            error.message.toLowerCase().includes("not allowed") ||
+            error.message.toLowerCase().includes("url") ||
+            error.message.toLowerCase().includes("magic link"))
+        ) {
+          const retry = await supabase.auth.signInWithOtp({
+            email: cleanEmail,
+            options: {
+              shouldCreateUser: activeTab === "register",
+            },
+          });
+          error = retry.error;
+        }
 
         if (error) {
           throw error;
@@ -173,13 +189,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setStep("otp");
     } catch (err: any) {
-      const msg = err?.message || String(err);
-      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+      const msg = (err?.message || String(err)).toLowerCase();
+      if (msg.includes("failed to fetch") || msg.includes("networkerror")) {
         setErrorMessage(
-          "Could not connect to Supabase (Failed to fetch). Please check if your Supabase project is active or unpaused in your Supabase dashboard."
+          "Could not connect to Supabase. Please check if your Supabase project is active or unpaused in your Supabase dashboard."
+        );
+      } else if (
+        msg.includes("rate limit") ||
+        msg.includes("over_email_send_rate_limit") ||
+        msg.includes("too many requests") ||
+        msg.includes("exceeded")
+      ) {
+        setErrorMessage(
+          "Supabase default email rate limit reached (3 emails/hour limit on free tier). Please wait a few minutes, or use Google Sign In."
+        );
+      } else if (msg.includes("sending magic link") || msg.includes("confirmation mail") || msg.includes("error sending")) {
+        setErrorMessage(
+          "Supabase could not dispatch the verification email. You may have reached the 3 emails/hour limit on Supabase's default mailer. Try Google Sign In or wait a few minutes."
         );
       } else {
-        setErrorMessage(msg);
+        setErrorMessage(err?.message || "Failed to send verification code.");
       }
     } finally {
       setLoading(false);
