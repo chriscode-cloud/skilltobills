@@ -1,0 +1,43 @@
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import {defineConfig} from 'vite';
+
+export default defineConfig(() => {
+  return {
+    plugins: [react(), tailwindcss()],
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
+        process.env.VITE_SUPABASE_URL &&
+        !process.env.VITE_SUPABASE_URL.toLowerCase().includes('your-project') &&
+        !process.env.VITE_SUPABASE_URL.toLowerCase().includes('placeholder') &&
+        !process.env.VITE_SUPABASE_URL.toLowerCase().includes('example')
+          ? process.env.VITE_SUPABASE_URL
+          : 'https://pvsrowtmzpgmieooafbn.supabase.co'
+      ),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
+        process.env.VITE_SUPABASE_ANON_KEY &&
+        !process.env.VITE_SUPABASE_ANON_KEY.toLowerCase().includes('your-') &&
+        !process.env.VITE_SUPABASE_ANON_KEY.toLowerCase().includes('placeholder') &&
+        !process.env.VITE_SUPABASE_ANON_KEY.toLowerCase().includes('example')
+          ? process.env.VITE_SUPABASE_ANON_KEY
+          : 'sb_publishable_oXrM0xJLWZ-mZqoLjVwfCA_cCg_Kp6R'
+      ),
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    server: {
+      host: '0.0.0.0',
+      port: 3000,
+      allowedHosts: true as const,
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
+      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+  };
+});
