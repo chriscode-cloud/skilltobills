@@ -1,0 +1,213 @@
+========================================================================
+                      SKILL2BILLS - COMPLETE WEBSITE CONTENT
+========================================================================
+
+This document contains 100% accurate, literal copy extracted directly from the
+Skill2Bills application codebase (including hero text, announcement bar, navigation,
+programs, curriculum blueprints, tools, articles, and customer spotlights).
+
+------------------------------------------------------------------------
+1. UTILITY HEADER & ANNOUNCEMENT BAR (TopBar.tsx & TelecastHeader.tsx)
+------------------------------------------------------------------------
+- Announcement Ticker:
+  "✦ 2026 ENROLLMENT NOW ACTIVE ✦ LIVE MENTOR SLOTS FILLING RAPIDLY ✦ 30-DAY PLACEMENT GUARANTEE APPLIES"
+
+- Top Bar Utility Menu:
+  * Community (Dropdown Options):
+    - All Community Hubs
+    - Discord Creator Hub
+    - Learners Voices & Proof
+    - Live AMAs & Workshops
+    - Creator Mentorship Network
+  * Blog
+  * Support
+  * Login
+
+------------------------------------------------------------------------
+2. NAVIGATION HEADER (Navbar.tsx)
+------------------------------------------------------------------------
+- Brand Logo Text: "Skill2Bills"
+- Nav Items:
+  * Programmes (Dropdown Options - Note: "Digital Product Arbitrage" and "Creator Agency" successfully removed):
+    - All Programmes
+    - AI & Virtual Influencers
+    - Viral Content & Short-Form UGC
+    - Live Streaming & Gaming
+    - Faceless YouTube Automation
+  * Newsletter & Updates
+- CTA Button: "Explore All Creator Programmes"
+
+------------------------------------------------------------------------
+3. HERO SECTION (HeroSection.tsx)
+------------------------------------------------------------------------
+- Main Headline:
+  "Online Wealth Is Already Here"
+
+- Subheading Description:
+  "Learn what actually generates income in 2026. Watch the viral breakdown of 17 modern AI side hustles every student and beginner should know about."
+
+- Primary CTA Button:
+  "Explore Hustle Programmes"
+
+- Hero Embed Video Walkthrough:
+  - Video Source: "https://www.youtube-nocookie.com/embed/q0Vs_uoL_hY"
+  - Title: "17 AI Side Hustles Every Student Should Know About"
+
+------------------------------------------------------------------------
+4. PATHWAYS & COURSE BLUEPRINTS (contentData.ts & ProgramPage.tsx)
+------------------------------------------------------------------------
+
+--- PATHWAY 1: AI & Virtual Influencers ---
+- Title: "AI & Virtual Influencers"
+- Category: "Fanvue & Digital Models"
+- Tagline: "Build 5-figure faceless revenue streams with hyper-realistic AI avatars"
+- Course Description:
+  "Design hyper-realistic AI personas, build loyal Fanvue & Instagram subscriber bases, and automate 5-figure monthly sponsorships without ever showing your face."
+- Estimated Revenue Range: "$6,500 – $28,000 / month"
+- Curriculum Blueprint Steps:
+  01. Midjourney & Flux Hyper-Realistic Face Consistency
+      - Includes live exercises, assignments, and certified creator check-ins.
+  02. Setting up Monetized Fanvue & Instagram Creator Funnels
+      - Includes live exercises, assignments, and certified creator check-ins.
+  03. Automated Chatting & Direct Message AI Assistants
+      - Includes live exercises, assignments, and certified creator check-ins.
+  04. Brand Sponsorship Pitching for Virtual Ambassadors
+      - Includes live exercises, assignments, and certified creator check-ins.
+  05. Legal Compliance & AI Disclosures for Maximum Longevity
+      - Includes live exercises, assignments, and certified creator check-ins.
+- Pro Creator Tech Stack:
+  - Fanvue, Midjourney v6, ComfyUI, Magnific AI, ManyChat
+- Program Video:
+  - Video Source: "/ai-side-hustles.mp4"
+  - Video Poster: "/video-poster.jpg"
+
+--- PATHWAY 2: Viral Content & Short-Form UGC ---
+- Title: "Viral Content & Short-Form UGC"
+- Category: "Short-Form & UGC"
+- Tagline: "Turn 15-second smartphone edits into brand deals & algorithmic dominance"
+- Course Description:
+  "Get hired as a professional creator or start earning independently with a portfolio that shows what you can do across TikTok, YouTube Shorts, and UGC brand contracts."
+- Estimated Revenue Range: "$4,200 – $19,500 / month"
+- Curriculum Blueprint Steps:
+  01. Psychology of the 3-Second Hook & Retention Curve
+      - Includes live exercises, assignments, and certified creator check-ins.
+  02. CapCut Pro & Premiere Viral Pacing Workflows
+      - Includes live exercises, assignments, and certified creator check-ins.
+  03. Landing $1,500/video UGC Contracts with Global Brands
+      - Includes live exercises, assignments, and certified creator check-ins.
+  04. YouTube Automation & Faceless Channel Scaling
+      - Includes live exercises, assignments, and certified creator check-ins.
+  05. TikTok Creator Rewards Program & RPM Optimization
+      - Includes live exercises, assignments, and certified creator check-ins.
+- Pro Creator Tech Stack:
+  - CapCut, TikTok Shop, Notion Creator Hub, ElevenLabs, Epidemic Sound
+- Program Video:
+  - Video Source: "/ai-side-hustles.mp4"
+  - Video Poster: "/video-poster.jpg"
+
+--- PATHWAY 3: Live Streaming & Gaming ---
+- Title: "Live Streaming & Gaming"
+- Category: "Twitch, Kick & YouTube"
+- Tagline: "Monetize your passion with loyal viewer bases and high-margin affiliate streams"
+- Course Description:
+  "Launch your stream career, start a community, or build income streams that don't depend on anyone else deciding you're ready on Twitch, Kick, and YouTube Live."
+- Estimated Revenue Range: "$3,800 – $24,000 / month"
+- Curriculum Blueprint Steps:
+  01. OBS Studio Setup, Audio Compression & Dynamic Overlays
+      - Includes live exercises, assignments, and certified creator check-ins.
+  02. Speedrunning to Twitch Affiliate & Kick Creator Program
+      - Includes live exercises, assignments, and certified creator check-ins.
+  03. Engaging Dead Chats: Viewer Retention Techniques
+      - Includes live exercises, assignments, and certified creator check-ins.
+  04. Securing Energy Drink, Tech & VPN Sponsorship Contracts
+      - Includes live exercises, assignments, and certified creator check-ins.
+  05. Merchandising & Multi-Platform VOD Repurposing
+      - Includes live exercises, assignments, and certified creator check-ins.
+- Pro Creator Tech Stack:
+  - OBS Studio, Streamlabs, Discord, Kick Studio, Voicemod
+- Program Video:
+  - Video Source: "/ai-side-hustles.mp4"
+  - Video Poster: "/video-poster.jpg"
+
+------------------------------------------------------------------------
+5. TRANSFORMATION IN ACTION STORIES (TransformationSection.tsx)
+------------------------------------------------------------------------
+- Section Heading: "Transformation in Action"
+
+- Video Testimonial Story 1 (Elena's Story):
+  * Title: "From No Gigs to $18,400 in Brand Deals in 3 Weeks"
+  * Creator Name: "Khadija & Alex"
+  * Role: "UGC Agency Partners"
+  * Platform: "TikTok & Instagram"
+  * Before Income Level: "$0 in freelance work"
+  * Current Income Level: "$18,400 / month across 6 retainers"
+  * Video Length: "3:48"
+  * Direct Quote: "Brands don't care about your resume; they care if you can make a video stop thumbs scrolling. Skill2Bills gave us the exact pitch decks and lighting tricks."
+
+- Highlight Quote Box (Ahmed's Story):
+  * Category Header: "FANVUE / TWITCH PARTNER"
+  * Text Quote:
+    “What started as learning AI persona creation grew into coaching others and eventually managing 4 digital avatars generating over $22k/month in recurring subscriber revenue.”
+  * Author Profile Name: "Ahmed E."
+  * Author Profile Sublabel: "Agency Founder • Top 0.1% Fanvue Creator"
+
+- Active Platform Metrics:
+  * Metric Card 1: "347.1K" - "Total Active Hustlers Trained"
+  * Metric Card 2: "43.4K" - "Young Creators Supported in 2026"
+  * Metric Card 3: "257.9K" - "Monetized Channels & Accounts"
+  * Metric Card 4: "60.1K" - "Full-Time Exits from 9-to-5s"
+
+------------------------------------------------------------------------
+6. INSIDER BLOG PAPERS (BlogPage.tsx)
+------------------------------------------------------------------------
+- Section Header Name: "The Creator Blueprint"
+
+- Article 1:
+  * Category: "TWITCH & KICK, STREAMING INCOME, SPONSORSHIPS"
+  * Title: "How Beginners Are Hitting Twitch Affiliate and Signing $2k Brand Deals in 30 Days"
+  * Read Time: "5 min read"
+  * Date Written: "May 24, 2026"
+  * Short Summary: "Breaking down the exact raid schedules, Discord funnel strategies, and warm-outreach email templates our members used to secure their first paid hardware partnerships."
+  * Author Profile: "Tariq Vance" (Partnered Twitch Creator)
+
+- Article 2:
+  * Category: "FANVUE & AI PERSONAS, PROMPT PACKS, CASE STUDIES"
+  * Title: "The Step-by-Step Anatomy of a $10,000/Month Faceless AI Influencer on Fanvue"
+  * Read Time: "7 min read"
+  * Date Written: "June 02, 2026"
+  * Short Summary: "From LoRA training and lighting prompts in Midjourney to high-converting subscriber tiers and automated DM messaging on Fanvue."
+  * Author Profile: "Elena Rostova" (AI Agency Director)
+
+- Article 3:
+  * Category: "TIKTOK CREATOR REWARDS, VIRAL SHORT-FORM, AUTOMATION"
+  * Title: "AI Tools for Viral Video Creation: What Matters for 2026 Algorithms?"
+  * Read Time: "6 min read"
+  * Date Written: "June 08, 2026"
+  * Short Summary: "Why pacing, sound design, and automated b-roll generators are outperforming traditional high-budget production setups on TikTok and Reels."
+  * Author Profile: "Devon Chen" (Short-Form Growth Hacker)
+
+------------------------------------------------------------------------
+7. INSIDER NEWSLETTER & FOOTER (SubscribeBanner.tsx & Footer.tsx)
+------------------------------------------------------------------------
+- Newsletter Container:
+  * Headline: "Subscribe to Skill2Bills Updates"
+  * Supporting Copy: "We bring together industry leaders to share insights, spark ideas, and help you level up."
+  * Confirmation Box: "You're on the insider list!"
+
+- Footer Navigation:
+  * Quick Links Columns:
+    - AI & Virtual Influencers
+    - Viral Content & Short-Form UGC
+    - Live Streaming & Gaming
+    - Faceless YouTube Automation
+  * Student Success Area:
+    - Success Stories
+    - Community Discord
+    - Resource GDrive
+  * Policies Info:
+    - Terms of Service
+    - Privacy Policy
+    - Student Support
+- Copyright Notice:
+  "© 2026 Skill2Bills Education. All rights reserved. Registered trademark."
+========================================================================
