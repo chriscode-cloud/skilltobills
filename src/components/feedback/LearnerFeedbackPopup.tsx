@@ -1,20 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Textarea } from "@/components/ui/textarea";
 import {
   CheckCircle2,
-  Copy,
-  Check,
-  Send,
+  ExternalLink,
   Sparkles,
+  Loader2,
+  Check,
+  MessageSquare,
+  X,
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 
@@ -23,98 +23,110 @@ interface LearnerFeedbackPopupProps {
   onClose: () => void;
   trackSlug?: string;
   trackTitle?: string;
-  completedCount: number;
+  completedCount?: number;
   userEmail?: string;
   onFeedbackSubmitted?: () => void;
 }
+
+const TYPEFORM_ID = "01M6HRXRE7VBRM0DCCEAC5SXWB";
+const TYPEFORM_URL = `https://form.typeform.com/to/${TYPEFORM_ID}`;
+const SCRIPT_SRC = "//embed.typeform.com/next/embed.js";
 
 export const LearnerFeedbackPopup: React.FC<LearnerFeedbackPopupProps> = ({
   isOpen,
   onClose,
   trackSlug = "ai-virtual-influencers",
-  trackTitle = "Skill2Bills",
-  completedCount,
+  trackTitle = "Skill2Bills Creator Academy",
+  completedCount = 2,
   userEmail = "creator@skill2bills.com",
   onFeedbackSubmitted,
 }) => {
-  // 1. Overall rating (1 to 5)
-  const [rating, setRating] = useState<string>("5");
-
-  // 2. How easy were the lessons to understand?
-  const [easeLevel, setEaseLevel] = useState<string>("Very easy");
-
-  // 3. How was the lesson pace?
-  const [pace, setPace] = useState<string>("About right");
-
-  // 4. Did you face any difficulty while learning?
-  const [difficulty, setDifficulty] = useState<string>("No major difficulty");
-
-  // 5. What is the most useful thing you've learned so far?
-  const [mostUseful, setMostUseful] = useState<string>("");
-
-  // 6. What is one thing we should improve?
-  const [oneImprovement, setOneImprovement] = useState<string>("");
-
-  // 7. Do you feel ready to continue to the next lesson?
-  const [readyForNext, setReadyForNext] = useState<string>("Yes, definitely");
-
-  // 8. Which device did you use to access the lessons?
-  const [deviceUsed, setDeviceUsed] = useState<string>("Laptop or desktop");
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [hasMarkedCompleted, setHasMarkedCompleted] = useState(false);
 
-  const formatResponsesForCopy = (): string => {
-    return [
-      `Feedback for Skill2Bills (${trackTitle})`,
-      `Completed Lessons: ${completedCount}`,
-      `User: ${userEmail}`,
-      `---`,
-      `1. Overall experience rating (1-5): ${rating}/5`,
-      `2. Easy to understand: ${easeLevel}`,
-      `3. Lesson pace: ${pace}`,
-      `4. Difficulties faced: ${difficulty}`,
-      `5. Most useful thing learned: ${mostUseful.trim() || "(None entered)"}`,
-      `6. One thing to improve: ${oneImprovement.trim() || "(None entered)"}`,
-      `7. Ready to continue: ${readyForNext}`,
-      `8. Device used: ${deviceUsed}`,
-      `Submitted at: ${new Date().toLocaleString()}`,
-    ].join("\n");
-  };
+  // Load and initialize Typeform embed whenever modal opens
+  useEffect(() => {
+    if (!isOpen) return;
 
-  const handleCopy = async () => {
-    try {
-      const text = formatResponsesForCopy();
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch (err) {
-      console.warn("Could not copy responses to clipboard", err);
+    let isMounted = true;
+
+    // Helper to trigger Typeform embed loader
+    const initTypeform = () => {
+      try {
+        const tf = (window as any).tf;
+        if (tf && typeof tf.load === "function") {
+          tf.load();
+        }
+      } catch (err) {
+        console.warn("Typeform tf.load error:", err);
+      }
+    };
+
+    // Check if embed script is already in the DOM
+    const existingScript = document.querySelector(`script[src*="embed.typeform.com/next/embed.js"]`);
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = SCRIPT_SRC;
+      script.async = true;
+      script.onload = () => {
+        if (isMounted) {
+          initTypeform();
+        }
+      };
+      document.body.appendChild(script);
+    } else {
+      // Re-trigger Typeform scanner on the freshly mounted DOM node
+      const timer = setTimeout(initTypeform, 100);
+      return () => clearTimeout(timer);
     }
-  };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setIsSubmitting(true);
+    // Listen for postMessage from Typeform when respondent finishes
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        const isFormSubmitted =
+          data?.type === "form-submit" ||
+          data?.event === "form-submit" ||
+          data?.action === "form-submit" ||
+          event.data?.type === "form-submit" ||
+          (typeof event.data === "string" && event.data.includes("form-submit"));
+
+        if (isFormSubmitted) {
+          saveFeedbackRecord();
+        }
+      } catch {
+        if (typeof event.data === "string" && event.data.includes("form-submit")) {
+          saveFeedbackRecord();
+        }
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [isOpen]);
+
+  // Record feedback completion to localStorage and Supabase
+  const saveFeedbackRecord = async () => {
+    setIsSubmitted(true);
+    setHasMarkedCompleted(true);
 
     const feedbackPayload = {
       userEmail,
       trackSlug,
       trackTitle,
       completedCount,
-      rating: parseInt(rating, 10) || 5,
-      easeLevel,
-      pace,
-      difficulty,
-      mostUseful: mostUseful.trim(),
-      oneImprovement: oneImprovement.trim(),
-      readyForNext,
-      deviceUsed,
+      rating: 5,
+      pacing: "Optimal",
+      priority: "Typeform Submission",
+      comments: `Completed Typeform survey (ID: ${TYPEFORM_ID})`,
       submittedAt: new Date().toISOString(),
     };
 
-    // 1. Save to localStorage
     try {
       localStorage.setItem(`skill2bills_feedback_${trackSlug}`, JSON.stringify(feedbackPayload));
       localStorage.setItem("skill2bills_feedback_submitted_v2", "true");
@@ -123,11 +135,11 @@ export const LearnerFeedbackPopup: React.FC<LearnerFeedbackPopupProps> = ({
       const list = allSaved ? JSON.parse(allSaved) : [];
       list.push(feedbackPayload);
       localStorage.setItem("skill2bills_all_feedbacks", JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent("skill2bills_feedback_updated"));
     } catch (err) {
-      console.warn("Could not save to localStorage", err);
+      console.warn("Could not write feedback to localStorage:", err);
     }
 
-    // 2. Persist to Supabase if available
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -137,299 +149,136 @@ export const LearnerFeedbackPopup: React.FC<LearnerFeedbackPopupProps> = ({
             user_email: userEmail,
             track_slug: trackSlug,
             track_title: trackTitle,
-            rating: parseInt(rating, 10) || 5,
-            priority: difficulty,
-            pacing: pace,
-            comments: `Most useful: ${mostUseful.trim()} | To improve: ${oneImprovement.trim()}`,
+            rating: 5,
+            priority: "Typeform",
+            pacing: "Optimal",
+            comments: `Submitted via Typeform (${TYPEFORM_ID})`,
             metadata: {
-              easeLevel,
-              readyForNext,
-              deviceUsed,
               completedCount,
+              typeformId: TYPEFORM_ID,
+              submittedVia: "Typeform Live Embed",
             },
             created_at: new Date().toISOString(),
           },
         ]);
       } catch {
-        // graceful offline fallback
+        // silent fallback
       }
     }
 
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    if (onFeedbackSubmitted) onFeedbackSubmitted();
+    if (onFeedbackSubmitted) {
+      onFeedbackSubmitted();
+    }
+  };
 
+  const handleManualDone = () => {
+    saveFeedbackRecord();
     setTimeout(() => {
       onClose();
-    }, 2000);
+    }, 1200);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="flex flex-col gap-0 p-0 sm:max-w-[540px] max-h-[88vh] overflow-hidden bg-zinc-950 text-zinc-100 border-zinc-800 rounded-2xl shadow-2xl [&>button:last-child]:top-4 [&>button:last-child]:right-4">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="flex flex-col gap-0 p-0 sm:max-w-[680px] md:max-w-[740px] w-[95vw] max-h-[92vh] overflow-hidden bg-zinc-950 text-zinc-100 border border-zinc-800 rounded-3xl shadow-2xl [&>button:last-child]:top-4 [&>button:last-child]:right-4">
         {/* Header */}
-        <DialogHeader className="contents space-y-0 text-left">
-          <DialogTitle className="border-b border-zinc-800/80 px-6 py-4 text-base font-extrabold text-white flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#D4F636]" />
-            <span>Help us improve Skill2Bills</span>
-          </DialogTitle>
+        <DialogHeader className="p-4 sm:p-5 border-b border-zinc-800/80 bg-zinc-900/40 space-y-1">
+          <div className="flex items-center justify-between pr-8">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[#D4F636]/10 border border-[#D4F636]/30 flex items-center justify-center text-[#D4F636]">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <DialogTitle className="text-sm sm:text-base font-extrabold text-white tracking-tight">
+                Help Us Improve Skill2Bills
+              </DialogTitle>
+            </div>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#D4F636] bg-[#D4F636]/10 px-2.5 py-1 rounded-full border border-[#D4F636]/20">
+              {completedCount >= 2 ? "2 Lessons Done" : "Learner Feedback"}
+            </span>
+          </div>
+          <DialogDescription className="text-xs text-zinc-400">
+            You completed your first lessons! Take 60 seconds to share your thoughts so we can make the training even better.
+          </DialogDescription>
         </DialogHeader>
 
         {isSubmitted ? (
-          <div className="p-8 text-center space-y-4">
-            <div className="w-16 h-16 bg-[#D4F636]/15 text-[#D4F636] rounded-2xl flex items-center justify-center mx-auto ring-1 ring-[#D4F636]/30 shadow-[0_0_20px_rgba(212,246,54,0.15)]">
+          <div className="p-8 sm:p-12 text-center space-y-5 bg-zinc-950">
+            <div className="w-16 h-16 bg-[#D4F636]/15 text-[#D4F636] rounded-2xl flex items-center justify-center mx-auto ring-1 ring-[#D4F636]/30 shadow-[0_0_24px_rgba(212,246,54,0.2)]">
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-xl font-black text-white">Thank You!</h3>
+              <h3 className="text-xl font-black text-white">Thank You for Your Feedback!</h3>
               <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                Your feedback will directly help us make Skill2Bills better for learners like you.
+                Your input directly helps us refine video pacing, prompts, and practical tools for all creators in the academy.
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={onClose}
-              className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-6 py-2 rounded-xl cursor-pointer"
-            >
-              Continue Learning
-            </Button>
+            <div className="pt-2">
+              <Button
+                type="button"
+                onClick={onClose}
+                className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-6 py-2.5 rounded-xl cursor-pointer shadow-lg shadow-[#D4F636]/10"
+              >
+                Continue Learning &rarr;
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="px-6 py-5 overflow-y-auto space-y-6 text-xs text-zinc-300">
-            {/* Intro paragraph */}
-            <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/60 p-3 rounded-xl border border-zinc-800/70">
-              You've completed your first two lessons. Tell us how it's going. Your feedback will help us make Skill2Bills better for learners like you.
-            </p>
+          <div className="relative flex flex-col min-h-0">
+            {/* The live Typeform embed container as specified by the user */}
+            <div className="relative w-full h-[520px] sm:h-[580px] bg-zinc-950 flex flex-col">
+              <div
+                ref={containerRef}
+                key={`typeform-embed-${isOpen ? "open" : "closed"}`}
+                data-tf-live="01M6HRXRE7VBRM0DCCEAC5SXWB"
+                data-tf-translucent="true"
+                data-tf-auto-focus="true"
+                style={{ width: "100%", height: "100%" }}
+                className="w-full h-full"
+              />
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Question 1: Overall rating 1 to 5 */}
-              <div className="space-y-3">
-                <fieldset className="space-y-3">
-                  <legend className="text-xs font-bold text-white leading-normal">
-                    1. Overall, how would you rate your experience with these first two lessons?
-                  </legend>
-                  <RadioGroup
-                    value={rating}
-                    onValueChange={setRating}
-                    className="flex gap-0 -space-x-px rounded-xl shadow-sm overflow-hidden border border-zinc-800 bg-zinc-900/40"
-                  >
-                    {[1, 2, 3, 4, 5].map((number) => (
-                      <label
-                        key={number}
-                        className={`relative flex size-11 flex-1 cursor-pointer flex-col items-center justify-center border-r border-zinc-800 text-center text-sm font-bold transition-all last:border-r-0 ${
-                          rating === number.toString()
-                            ? "bg-[#D4F636] text-black shadow-inner font-black"
-                            : "text-zinc-300 hover:bg-zinc-800/60"
-                        }`}
-                      >
-                        <RadioGroupItem
-                          id={`radio-rating-${number}`}
-                          value={number.toString()}
-                          className="sr-only"
-                        />
-                        {number}
-                      </label>
-                    ))}
-                  </RadioGroup>
-                </fieldset>
-                <div className="flex justify-between text-[11px] font-medium text-zinc-500 px-1">
-                  <span>Very poor</span>
-                  <span>Excellent</span>
-                </div>
+            {/* Bottom Toolbar & Fallback */}
+            <div className="p-3 sm:px-5 sm:py-3.5 border-t border-zinc-800/80 bg-zinc-900/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-zinc-400 text-[11px]">
+                <MessageSquare className="w-3.5 h-3.5 text-[#D4F636]" />
+                <span>Powered by Typeform</span>
+                <span className="text-zinc-600">&bull;</span>
+                <a
+                  href={TYPEFORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-zinc-300 hover:text-[#D4F636] underline flex items-center gap-1 transition-colors"
+                >
+                  <span>Open in new window</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
 
-              {/* Question 2: How easy were the lessons to understand? */}
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-white block">
-                  2. How easy were the lessons to understand?
-                </Label>
-                <RadioGroup value={easeLevel} onValueChange={setEaseLevel} className="grid grid-cols-1 gap-2">
-                  {[
-                    "Very easy",
-                    "Mostly easy",
-                    "Some parts were confusing",
-                    "Difficult to follow",
-                  ].map((option) => (
-                    <label
-                      key={option}
-                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border cursor-pointer text-xs transition-all ${
-                        easeLevel === option
-                          ? "bg-[#D4F636]/15 border-[#D4F636] text-white font-bold ring-1 ring-[#D4F636]/30"
-                          : "bg-zinc-900/40 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900"
-                      }`}
-                    >
-                      <RadioGroupItem value={option} className="border-zinc-500 text-[#D4F636]" />
-                      <span>{option}</span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {/* Question 3: How was the lesson pace? */}
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-white block">
-                  3. How was the lesson pace?
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {["Too slow", "About right", "Too fast"].map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setPace(option)}
-                      className={`py-2 px-2.5 rounded-xl text-center text-xs font-medium border transition-colors cursor-pointer ${
-                        pace === option
-                          ? "bg-zinc-800 border-[#D4F636] text-white font-bold ring-1 ring-[#D4F636]/40"
-                          : "bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:bg-zinc-900 hover:text-white"
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Question 4: Did you face any difficulty while learning? */}
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-white block">
-                  4. Did you face any difficulty while learning?
-                </Label>
-                <RadioGroup value={difficulty} onValueChange={setDifficulty} className="grid grid-cols-1 gap-2">
-                  {[
-                    "No major difficulty",
-                    "Understanding the content",
-                    "Internet or data costs",
-                    "Using the tools",
-                    "Finding time to learn",
-                    "Other",
-                  ].map((option) => (
-                    <label
-                      key={option}
-                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border cursor-pointer text-xs transition-all ${
-                        difficulty === option
-                          ? "bg-[#D4F636]/15 border-[#D4F636] text-white font-bold ring-1 ring-[#D4F636]/30"
-                          : "bg-zinc-900/40 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900"
-                      }`}
-                    >
-                      <RadioGroupItem value={option} className="border-zinc-500 text-[#D4F636]" />
-                      <span>{option}</span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {/* Question 5: What is the most useful thing you've learned so far? */}
-              <div className="space-y-2">
-                <Label htmlFor="q5-useful" className="text-xs font-bold text-white block">
-                  5. What is the most useful thing you've learned so far?
-                </Label>
-                <Textarea
-                  id="q5-useful"
-                  placeholder="Share your favorite takeaway or practical technique..."
-                  value={mostUseful}
-                  onChange={(e) => setMostUseful(e.target.value)}
-                  className="bg-zinc-900/80 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 rounded-xl text-xs min-h-[75px] focus-visible:ring-[#D4F636]/40"
-                />
-              </div>
-
-              {/* Question 6: What is one thing we should improve? */}
-              <div className="space-y-2">
-                <Label htmlFor="q6-improve" className="text-xs font-bold text-white block">
-                  6. What is one thing we should improve?
-                </Label>
-                <Textarea
-                  id="q6-improve"
-                  placeholder="What could be clearer, added, or streamlined?"
-                  value={oneImprovement}
-                  onChange={(e) => setOneImprovement(e.target.value)}
-                  className="bg-zinc-900/80 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 rounded-xl text-xs min-h-[75px] focus-visible:ring-[#D4F636]/40"
-                />
-              </div>
-
-              {/* Question 7: Do you feel ready to continue to the next lesson? */}
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-white block">
-                  7. Do you feel ready to continue to the next lesson?
-                </Label>
-                <RadioGroup value={readyForNext} onValueChange={setReadyForNext} className="grid grid-cols-1 gap-2">
-                  {[
-                    "Yes, definitely",
-                    "Yes, but I need more practice",
-                    "Not yet, I need help",
-                  ].map((option) => (
-                    <label
-                      key={option}
-                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border cursor-pointer text-xs transition-all ${
-                        readyForNext === option
-                          ? "bg-[#D4F636]/15 border-[#D4F636] text-white font-bold ring-1 ring-[#D4F636]/30"
-                          : "bg-zinc-900/40 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900"
-                      }`}
-                    >
-                      <RadioGroupItem value={option} className="border-zinc-500 text-[#D4F636]" />
-                      <span>{option}</span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {/* Question 8: Which device did you use to access the lessons? */}
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-white block">
-                  8. Which device did you use to access the lessons?
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    "Android phone",
-                    "iPhone",
-                    "Laptop or desktop",
-                    "Tablet or other",
-                  ].map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setDeviceUsed(option)}
-                      className={`py-2 px-3 rounded-xl text-left text-xs font-medium border transition-colors cursor-pointer ${
-                        deviceUsed === option
-                          ? "bg-zinc-800 border-[#D4F636] text-white font-bold ring-1 ring-[#D4F636]/40"
-                          : "bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:bg-zinc-900 hover:text-white"
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons: Copy responses & Send feedback */}
-              <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+              <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={handleCopy}
-                  className="w-full sm:w-1/2 border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs h-10 rounded-xl gap-2 cursor-pointer"
+                  variant="ghost"
+                  onClick={onClose}
+                  className="text-zinc-400 hover:text-white hover:bg-zinc-800 text-xs h-8 px-3 rounded-lg cursor-pointer"
                 >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Copy feedback responses</span>
-                    </>
-                  )}
+                  Later
                 </Button>
-
                 <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full sm:w-1/2 bg-[#D4F636] hover:bg-[#c2e42b] text-black font-black text-xs h-10 rounded-xl gap-2 transition-all shadow-md cursor-pointer"
+                  type="button"
+                  onClick={handleManualDone}
+                  disabled={hasMarkedCompleted}
+                  className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs h-8 px-4 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? "Sending..." : "Send feedback"}</span>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{hasMarkedCompleted ? "Recorded!" : "I've Submitted This"}</span>
                 </Button>
               </div>
-            </form>
+            </div>
           </div>
         )}
       </DialogContent>

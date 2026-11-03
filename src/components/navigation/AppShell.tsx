@@ -23,6 +23,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
   const activeCourse = findCourseBySlugOrId(rawTrackSlug) || LMS_COURSES[0];
 
   const [trackCompletedCount, setTrackCompletedCount] = React.useState(0);
+  const [totalCompletedCount, setTotalCompletedCount] = React.useState(0);
   const [showAutoFeedback, setShowAutoFeedback] = React.useState(false);
 
   React.useEffect(() => {
@@ -31,6 +32,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
       if (saved) {
         const parsed = JSON.parse(saved);
         const completedIds: string[] = parsed?.completedLessonIds || [];
+        setTotalCompletedCount(completedIds.length);
         const courseLessonIds = activeCourse.modules.flatMap((m) => m.lessons.map((l) => l.id));
         const count = completedIds.filter((id) => courseLessonIds.includes(id)).length;
         setTrackCompletedCount(count);
@@ -40,17 +42,26 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
     }
   }, [location.pathname, activeCourse.id]);
 
-  // Automated pop up in dashboard / syllabus if learner has completed 2+ lessons in this track
+  // Automated pop up in dashboard / syllabus if learner has completed 2+ lessons
   React.useEffect(() => {
-    const hasSubmitted = localStorage.getItem(`skill2bills_feedback_${activeCourse.slug}`);
+    const hasSubmitted =
+      localStorage.getItem(`skill2bills_feedback_${activeCourse.slug}`) ||
+      localStorage.getItem("skill2bills_feedback_submitted_v2");
     const hasDismissedInSession = sessionStorage.getItem(`skill2bills_dismissed_${activeCourse.slug}`);
-    if (trackCompletedCount >= 2 && !hasSubmitted && !hasDismissedInSession) {
+    if ((trackCompletedCount >= 2 || totalCompletedCount >= 2) && !hasSubmitted && !hasDismissedInSession) {
       const timer = setTimeout(() => {
         setShowAutoFeedback(true);
       }, 700);
       return () => clearTimeout(timer);
     }
-  }, [trackCompletedCount, activeCourse.slug]);
+  }, [trackCompletedCount, totalCompletedCount, activeCourse.slug]);
+
+  // Manual feedback modal opener from sidebar or dashboard
+  React.useEffect(() => {
+    const handleOpenFeedback = () => setShowAutoFeedback(true);
+    window.addEventListener("skill2bills_open_feedback", handleOpenFeedback);
+    return () => window.removeEventListener("skill2bills_open_feedback", handleOpenFeedback);
+  }, []);
 
   const currentTab: "dashboard" | "course" | "resources" | "community" | "settings" =
     location.pathname.startsWith("/learn")

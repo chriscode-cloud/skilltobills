@@ -76,17 +76,19 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
   // Direct modal popup state for automated feedback after completing 2 lessons
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
-  // Automatically pop up feedback when learner has completed >= 2 lessons in this track
+  // Automatically pop up Typeform feedback when learner has completed >= 2 lessons
   useEffect(() => {
-    const hasSubmitted = localStorage.getItem(`skill2bills_feedback_${course.slug}`);
+    const hasSubmitted =
+      localStorage.getItem(`skill2bills_feedback_${course.slug}`) ||
+      localStorage.getItem("skill2bills_feedback_submitted_v2");
     const hasDismissedInSession = sessionStorage.getItem(`skill2bills_dismissed_${course.slug}`);
-    if (trackCompletedCount >= 2 && !hasSubmitted && !hasDismissedInSession) {
+    if ((trackCompletedCount >= 2 || completedLessonIds.length >= 2) && !hasSubmitted && !hasDismissedInSession) {
       const timer = setTimeout(() => {
         setShowFeedbackModal(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [trackCompletedCount, course.slug]);
+  }, [trackCompletedCount, completedLessonIds.length, course.slug]);
 
   usePageMeta(`${currentLesson.title} | ${course.title}`);
 
@@ -125,10 +127,16 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
     } else {
       nextCompleted = [...completedLessonIds, currentLesson.id];
 
-      // If user reaches 2 or more completed lessons in this track, automatically pop up the feedback modal!
+      // If user reaches 2 or more completed lessons, automatically pop up the Typeform feedback modal!
       const nextTrackCount = allLessonsWithModule.filter((l) => nextCompleted.includes(l.id)).length;
-      if (nextTrackCount >= 2) {
-        setShowFeedbackModal(true);
+      if (nextTrackCount >= 2 || nextCompleted.length >= 2) {
+        const hasSubmitted =
+          localStorage.getItem(`skill2bills_feedback_${course.slug}`) ||
+          localStorage.getItem("skill2bills_feedback_submitted_v2");
+        const hasDismissedInSession = sessionStorage.getItem(`skill2bills_dismissed_${course.slug}`);
+        if (!hasSubmitted && !hasDismissedInSession) {
+          setShowFeedbackModal(true);
+        }
       }
     }
 

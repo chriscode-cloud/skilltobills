@@ -139,11 +139,11 @@ export const LmsSidebar: React.FC<LmsSidebarProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  window.open("mailto:support@skill2bills.com", "_blank");
+                  window.dispatchEvent(new CustomEvent("skill2bills_open_feedback"));
                 }}
                 className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-900/60 transition-all cursor-pointer text-left"
               >
-                <HelpCircle className="w-4 h-4 shrink-0" />
+                <HelpCircle className="w-4 h-4 shrink-0 text-[#D4F636]" />
                 <span>Feedback</span>
               </button>
 
