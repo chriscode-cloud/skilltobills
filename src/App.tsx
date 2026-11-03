@@ -36,7 +36,7 @@ import { SettingsPages } from "./components/settings/SettingsPages";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { AdminGuard } from "./components/admin/AdminGuard";
 import { COURSE_TRACKS, CourseTrack, BLOG_ARTICLES } from "./data/contentData";
-import { getStoredUser, clearStoredUser, setStoredUser, AuthUser, ADMIN_EMAILS } from "./lib/auth";
+import { getStoredUser, clearStoredUser, setStoredUser, AuthUser, ADMIN_EMAILS, isUserAdmin } from "./lib/auth";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { usePageMeta } from "./hooks/usePageMeta";
 
@@ -52,6 +52,9 @@ const RequireAuth: React.FC<{
   if (!currentUser) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
+  if (!currentUser.onboardingCompleted && !isUserAdmin(currentUser) && location.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
+  }
   return <>{children}</>;
 };
 
@@ -61,6 +64,9 @@ const RedirectIfAuth: React.FC<{
   children: React.ReactNode;
 }> = ({ currentUser, children }) => {
   if (currentUser) {
+    if (!currentUser.onboardingCompleted && !isUserAdmin(currentUser)) {
+      return <Navigate to="/onboarding" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
@@ -317,20 +323,16 @@ export default function App() {
               window.history.replaceState(null, "", window.location.pathname);
             }
 
-            // Route user based on intention:
-            // - Login users or returning students go straight to /dashboard
-            // - Only newly signing up users who have not completed onboarding go to /onboarding
-            const pendingTarget = localStorage.getItem("skill2bills_target_after_auth");
+            // Route user based on onboarding status:
+            // Un-onboarded non-admin users MUST complete onboarding first
             localStorage.removeItem("skill2bills_target_after_auth");
 
-            if (pendingTarget === "/dashboard") {
-              if (window.location.pathname !== "/dashboard") {
-                window.location.assign("/dashboard");
-              }
-            } else if (pendingTarget === "/onboarding" && !isCompleted) {
+            if (!isCompleted && !isDesignatedAdmin) {
               if (window.location.pathname !== "/onboarding") {
                 window.location.assign("/onboarding");
               }
+            } else if (window.location.pathname === "/login" || window.location.pathname === "/signup") {
+              window.location.assign("/dashboard");
             }
           } else if (event === "SIGNED_OUT") {
             clearStoredUser();

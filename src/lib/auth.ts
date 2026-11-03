@@ -23,20 +23,40 @@ export const ADMIN_EMAILS = [
   "christianaaboagye06@gmail.com",
 ];
 
-export const AUTH_STORAGE_KEY = "skill2bills_auth_user_v1";
+export const AUTH_STORAGE_KEY = "skill2bills_auth_user_v2";
 
 /**
  * Retrieve cached user from localStorage
  */
 export function getStoredUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    // Try v2 key first, fallback to v1 key for migration
+    let raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) {
+      raw = localStorage.getItem("skill2bills_auth_user_v1");
+      if (raw) {
+        localStorage.removeItem("skill2bills_auth_user_v1");
+      }
+    }
     if (!raw) return null;
+
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.email && ADMIN_EMAILS.includes(parsed.email.toLowerCase().trim())) {
+    if (!parsed || typeof parsed !== "object" || !parsed.email) return null;
+
+    const emailLower = (parsed.email || "").toLowerCase().trim();
+
+    // Auto-grant admin role & onboarding for designated admin emails
+    if (ADMIN_EMAILS.includes(emailLower)) {
       parsed.role = "admin";
       parsed.onboardingCompleted = true;
     }
+
+    // Cache normalization:
+    // If track is missing or invalid, default to primary programme "ai-virtual-influencers"
+    if (!parsed.track || parsed.track === "none" || parsed.track === "content-creation") {
+      parsed.track = "ai-virtual-influencers";
+    }
+
     return parsed;
   } catch {
     return null;
@@ -52,6 +72,12 @@ export function setStoredUser(user: AuthUser): void {
       user.role = "admin";
       user.onboardingCompleted = true;
     }
+
+    // Ensure valid track
+    if (!user.track || user.track === "none" || user.track === "content-creation") {
+      user.track = "ai-virtual-influencers";
+    }
+
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
     window.dispatchEvent(new CustomEvent("skill2bills_auth_changed", { detail: user }));
     

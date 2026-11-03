@@ -18,7 +18,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
   // Determine active track from URL or user profile
   const rawTrackSlug = location.pathname.startsWith("/learn/")
     ? location.pathname.replace("/learn/", "").split("/")[0]
-    : currentUser.track || "content-clipping";
+    : currentUser.track || "ai-virtual-influencers";
 
   const activeCourse = findCourseBySlugOrId(rawTrackSlug) || LMS_COURSES[0];
 
@@ -62,7 +62,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
       : "dashboard";
 
   const handleSelectTab = (tab: "dashboard" | "course" | "resources" | "community" | "settings") => {
-    const userTrack = currentUser.track || "content-clipping";
+    const userTrack = currentUser.track || "ai-virtual-influencers";
     if (tab === "dashboard") navigate("/dashboard");
     else if (tab === "course") navigate(`/learn/${userTrack}`);
     else if (tab === "settings") navigate("/settings/profile");

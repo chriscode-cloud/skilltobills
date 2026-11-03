@@ -129,6 +129,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ currentUser }) =
     const updatedUser: AuthUser = {
       ...currentUser,
       onboardingCompleted: true,
+      track: currentUser.track || "ai-virtual-influencers",
     };
     setStoredUser(updatedUser);
 
@@ -136,7 +137,10 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ currentUser }) =
       try {
         await supabase
           .from("profiles")
-          .update({ onboarding_completed: true })
+          .update({
+            onboarding_completed: true,
+            track: currentUser.track || "ai-virtual-influencers",
+          })
           .eq("id", currentUser.id);
       } catch {
         // ignore

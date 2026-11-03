@@ -42,12 +42,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
 
   // Retrieve post-login destination
   const getDestination = (user?: AuthUser) => {
-    // Logging in means the user already has an account: take them straight to dashboard!
-    if (mode === "login") {
-      return "/dashboard";
-    }
-    // For sign up: if user hasn't selected a track or finished onboarding, route to /onboarding
-    if (user && (!user.onboardingCompleted || !user.track)) {
+    // If user has not completed onboarding and is not an admin, route to onboarding!
+    if (user && !user.onboardingCompleted && user.role !== "admin") {
       return "/onboarding";
     }
     const saved = sessionStorage.getItem("skill2bills_redirect");
@@ -84,7 +80,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
       const displayName = name.trim() || normalizedEmail.split("@")[0];
 
       // Check if profile exists in DB table
-      let isCompleted = isDesignatedAdmin ? true : mode === "login";
+      let isCompleted = isDesignatedAdmin ? true : false;
       let userTrack = "ai-virtual-influencers";
 
       if (isSupabaseConfigured && supabase) {
@@ -96,7 +92,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
             .maybeSingle();
 
           if (existingProfile) {
-            if (existingProfile.onboarding_completed) isCompleted = true;
+            isCompleted = Boolean(existingProfile.onboarding_completed);
             if (existingProfile.track && existingProfile.track !== "none") userTrack = existingProfile.track;
           }
         } catch {
@@ -134,7 +130,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
 
     try {
       if (isSupabaseConfigured && supabase) {
-        const targetRoute = mode === "login" ? "/dashboard" : "/onboarding";
+        const targetRoute = "/dashboard";
         localStorage.setItem("skill2bills_target_after_auth", targetRoute);
 
         const redirectUri = `${window.location.origin}${targetRoute}`;
@@ -162,7 +158,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
           email: cleanGoogleEmail,
           name: cleanGoogleEmail.split("@")[0],
           role: isDesignatedAdmin ? "admin" : "student",
-          onboardingCompleted: isDesignatedAdmin ? true : mode === "login",
+          onboardingCompleted: isDesignatedAdmin ? true : false,
           track: "ai-virtual-influencers",
           createdAt: new Date().toISOString(),
         };

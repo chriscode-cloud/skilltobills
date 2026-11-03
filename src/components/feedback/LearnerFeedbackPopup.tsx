@@ -31,7 +31,7 @@ interface LearnerFeedbackPopupProps {
 export const LearnerFeedbackPopup: React.FC<LearnerFeedbackPopupProps> = ({
   isOpen,
   onClose,
-  trackSlug = "content-clipping",
+  trackSlug = "ai-virtual-influencers",
   trackTitle = "Skill2Bills",
   completedCount,
   userEmail = "creator@skill2bills.com",
