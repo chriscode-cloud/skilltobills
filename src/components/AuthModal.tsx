@@ -89,7 +89,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     chosenTrack?: string,
     customName?: string
   ) => {
-    const formattedTrack = chosenTrack || trackChoice || "ai-virtual-influencers";
+    const isDesignatedAdmin = [
+      "christianaboagye06@gmail.com",
+      "christianaaboagye06@gmail.com",
+    ].includes(userEmail.toLowerCase().trim());
+
+    const formattedTrack = isDesignatedAdmin
+      ? "ai-virtual-influencers"
+      : chosenTrack || trackChoice || "ai-virtual-influencers";
     const namePart = customName || userEmail.split("@")[0] || "Creator";
     const displayName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
 
@@ -97,6 +104,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       id: "usr-" + Math.random().toString(36).substring(2, 9),
       email: userEmail,
       name: displayName,
+      role: isDesignatedAdmin ? "admin" : "student",
+      onboardingCompleted: isDesignatedAdmin ? true : false,
       track: formattedTrack,
       goal: goalChoice || "$5,000 / month",
       timeCommitment: timeChoice || "5-15",

@@ -22,6 +22,27 @@ export async function signInWithGoogle(redirectTo: string = window.location.orig
   return data;
 }
 
+export async function sendMagicLink(email: string, redirectTo: string = window.location.origin) {
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: redirectTo,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function verifyOtpCode(email: string, token: string, type: "email" | "magiclink" = "email") {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;

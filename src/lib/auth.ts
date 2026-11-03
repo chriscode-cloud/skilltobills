@@ -45,15 +45,18 @@ export function getStoredUser(): AuthUser | null {
 
     const emailLower = (parsed.email || "").toLowerCase().trim();
 
-    // Auto-grant admin role & onboarding for designated admin emails
-    if (ADMIN_EMAILS.includes(emailLower)) {
+    // Auto-grant admin role, onboarding, and guarantee primary track for designated admin emails
+    if (ADMIN_EMAILS.includes(emailLower) || parsed.role === "admin") {
       parsed.role = "admin";
       parsed.onboardingCompleted = true;
+      if (!parsed.track || parsed.track === "content-clipping" || parsed.track === "content-creation" || parsed.track === "none") {
+        parsed.track = "ai-virtual-influencers";
+      }
     }
 
     // Cache normalization:
-    // If track is missing or invalid, default to primary programme "ai-virtual-influencers"
-    if (!parsed.track || parsed.track === "none" || parsed.track === "content-creation") {
+    // If track is missing or contains legacy clipping default, prioritize primary programme "ai-virtual-influencers"
+    if (!parsed.track || parsed.track === "none" || parsed.track === "content-creation" || parsed.track === "content-clipping") {
       parsed.track = "ai-virtual-influencers";
     }
 
@@ -68,13 +71,17 @@ export function getStoredUser(): AuthUser | null {
  */
 export function setStoredUser(user: AuthUser): void {
   try {
-    if (user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())) {
+    const emailLower = (user?.email || "").toLowerCase().trim();
+    if (user && emailLower && (ADMIN_EMAILS.includes(emailLower) || user.role === "admin")) {
       user.role = "admin";
       user.onboardingCompleted = true;
+      if (!user.track || user.track === "content-clipping" || user.track === "content-creation" || user.track === "none") {
+        user.track = "ai-virtual-influencers";
+      }
     }
 
-    // Ensure valid track
-    if (!user.track || user.track === "none" || user.track === "content-creation") {
+    // Ensure valid track - default to primary programme
+    if (!user.track || user.track === "none" || user.track === "content-creation" || user.track === "content-clipping") {
       user.track = "ai-virtual-influencers";
     }
 

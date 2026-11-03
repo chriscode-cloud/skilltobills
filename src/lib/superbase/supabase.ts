@@ -151,7 +151,7 @@ export async function getAllProfiles(): Promise<Profile[]> {
             profileMap.set(emailVal.toLowerCase().trim(), {
               id: fb.user_id || `fb-${Math.random().toString(36).substring(2, 8)}`,
               email: emailVal,
-              track: fb.track_title || fb.track_slug || "Content Clipping & Short-Form Video",
+              track: fb.track_title || fb.track_slug || "AI & Virtual Influencers",
               goal: "Active Learner (Feedback Submitted)",
               time_commitment: "5-15",
               experience_level: "Intermediate",

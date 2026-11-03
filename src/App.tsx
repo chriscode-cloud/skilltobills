@@ -184,65 +184,215 @@ function HashAndSessionManager({
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 1. Process OAuth Tokens returning in hash (#access_token=...)
-    if (window.location.hash.includes("access_token")) {
-      try {
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-        const token = hashParams.get("access_token");
-        if (token) {
-          const payloadBase64 = token.split(".")[1];
-          if (payloadBase64) {
-            const decoded = JSON.parse(atob(payloadBase64));
-            if (decoded && decoded.email) {
-              const meta = decoded.user_metadata || {};
-              const authUser: AuthUser = {
-                id: decoded.sub || "",
-                email: decoded.email,
-                name: meta.full_name || meta.name || decoded.email.split("@")[0],
-                avatar: meta.avatar_url || meta.picture,
-                createdAt: new Date().toISOString(),
-              };
-              setStoredUser(authUser);
-              setCurrentUser(authUser);
-              window.location.hash = "";
-              navigate("/dashboard", { replace: true });
-              return;
+    const handleAuthRedirect = async () => {
+      // 1. Check for error returned in hash or search (?error=... or #error=...)
+      if (window.location.hash.includes("error=") || window.location.search.includes("error=")) {
+        try {
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const searchParams = new URLSearchParams(window.location.search);
+          const errorDesc =
+            hashParams.get("error_description") ||
+            searchParams.get("error_description") ||
+            hashParams.get("error") ||
+            searchParams.get("error");
+          
+          if (errorDesc) {
+            console.warn("Auth redirect error encountered:", errorDesc);
+            window.history.replaceState(null, "", window.location.pathname);
+            sessionStorage.setItem("skill2bills_auth_error", errorDesc);
+            navigate("/login", { replace: true });
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 2. Process OAuth Tokens and Magic Link returning in hash (#access_token=...&refresh_token=...)
+      if (window.location.hash.includes("access_token")) {
+        try {
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token") || "";
+
+          if (accessToken) {
+            // Synchronize active session with Supabase client
+            if (isSupabaseConfigured && supabase && refreshToken) {
+              try {
+                await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+              } catch (e) {
+                console.warn("Could not register setSession with Supabase:", e);
+              }
+            }
+
+            const payloadBase64 = accessToken.split(".")[1];
+            if (payloadBase64) {
+              const decoded = JSON.parse(atob(payloadBase64.replace(/-/g, "+").replace(/_/g, "/")));
+              if (decoded && decoded.email) {
+                const userEmail = decoded.email.toLowerCase().trim();
+                const isDesignatedAdmin = ADMIN_EMAILS.includes(userEmail);
+                const meta = decoded.user_metadata || {};
+
+                const authUser: AuthUser = {
+                  id: decoded.sub || "usr-" + Math.random().toString(36).substring(2, 9),
+                  email: userEmail,
+                  name: meta.full_name || meta.name || userEmail.split("@")[0],
+                  role: isDesignatedAdmin ? "admin" : "student",
+                  onboardingCompleted: isDesignatedAdmin ? true : false,
+                  track: "ai-virtual-influencers",
+                  avatar: meta.avatar_url || meta.picture,
+                  createdAt: new Date().toISOString(),
+                };
+
+                // Sync profile into database table
+                if (isSupabaseConfigured && supabase) {
+                  try {
+                    await supabase.from("profiles").upsert({
+                      id: authUser.id,
+                      email: userEmail,
+                      name: authUser.name,
+                      role: authUser.role,
+                      onboarding_completed: authUser.onboardingCompleted,
+                      track: "ai-virtual-influencers",
+                      updated_at: new Date().toISOString(),
+                    });
+                  } catch {
+                    // ignore
+                  }
+                }
+
+                setStoredUser(authUser);
+                setCurrentUser(authUser);
+                window.history.replaceState(null, "", window.location.pathname);
+                navigate(isDesignatedAdmin ? "/dashboard" : "/onboarding", { replace: true });
+                return;
+              }
             }
           }
+        } catch (e) {
+          console.warn("Failed processing hash access_token:", e);
         }
-      } catch {
-        // fallback
       }
-    }
 
-    // 2. Map legacy hash URLs to clean paths
-    const hash = window.location.hash;
-    if (hash) {
-      if (hash.startsWith("#program/")) {
-        const id = hash.replace("#program/", "");
-        navigate(`/programmes/${id}`, { replace: true });
-      } else if (hash.startsWith("#blog/")) {
-        const id = hash.replace("#blog/", "");
-        navigate(`/blog/${id}`, { replace: true });
-      } else if (hash === "#blog") {
-        navigate("/blog", { replace: true });
-      } else if (hash.startsWith("#academy/")) {
-        const slug = hash.replace("#academy/", "");
-        navigate(`/learn/${slug}`, { replace: true });
-      } else if (hash === "#academy" || hash === "#classroom" || hash === "#lms") {
-        navigate("/dashboard", { replace: true });
-      } else if (hash === "#login") {
-        navigate("/login", { replace: true });
-      } else if (hash === "#join") {
-        navigate("/signup", { replace: true });
-      } else if (hash === "#terms") {
-        navigate("/terms", { replace: true });
-      } else if (hash === "#privacy") {
-        navigate("/privacy", { replace: true });
-      } else if (hash === "#admin" || hash === "#dashboard") {
-        navigate("/admin", { replace: true });
+      // 3. Process PKCE authentication code (?code=...) from Supabase magic link
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get("code");
+      if (code && isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data?.session?.user) {
+            const user = data.session.user;
+            const userEmail = (user.email || "").toLowerCase().trim();
+            const isDesignatedAdmin = ADMIN_EMAILS.includes(userEmail);
+            const meta = user.user_metadata || {};
+
+            const authUser: AuthUser = {
+              id: user.id,
+              email: userEmail,
+              name: meta.full_name || meta.name || userEmail.split("@")[0],
+              role: isDesignatedAdmin ? "admin" : "student",
+              onboardingCompleted: isDesignatedAdmin ? true : false,
+              track: "ai-virtual-influencers",
+              avatar: meta.avatar_url || meta.picture,
+              createdAt: user.created_at || new Date().toISOString(),
+            };
+
+            try {
+              await supabase.from("profiles").upsert({
+                id: authUser.id,
+                email: userEmail,
+                name: authUser.name,
+                role: authUser.role,
+                onboarding_completed: authUser.onboardingCompleted,
+                track: "ai-virtual-influencers",
+                updated_at: new Date().toISOString(),
+              });
+            } catch {
+              // ignore
+            }
+
+            setStoredUser(authUser);
+            setCurrentUser(authUser);
+            window.history.replaceState(null, "", window.location.pathname);
+            navigate(isDesignatedAdmin ? "/dashboard" : "/onboarding", { replace: true });
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed exchanging PKCE code for session:", e);
+        }
       }
-    }
+
+      // 4. Process OTP token_hash (?token_hash=...&type=...)
+      const tokenHash = searchParams.get("token_hash");
+      const otpType = searchParams.get("type");
+      if (tokenHash && isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: (otpType as any) || "magiclink",
+          });
+          if (!error && data?.session?.user) {
+            const user = data.session.user;
+            const userEmail = (user.email || "").toLowerCase().trim();
+            const isDesignatedAdmin = ADMIN_EMAILS.includes(userEmail);
+            const meta = user.user_metadata || {};
+
+            const authUser: AuthUser = {
+              id: user.id,
+              email: userEmail,
+              name: meta.full_name || meta.name || userEmail.split("@")[0],
+              role: isDesignatedAdmin ? "admin" : "student",
+              onboardingCompleted: isDesignatedAdmin ? true : false,
+              track: "ai-virtual-influencers",
+              avatar: meta.avatar_url || meta.picture,
+              createdAt: user.created_at || new Date().toISOString(),
+            };
+
+            setStoredUser(authUser);
+            setCurrentUser(authUser);
+            window.history.replaceState(null, "", window.location.pathname);
+            navigate(isDesignatedAdmin ? "/dashboard" : "/onboarding", { replace: true });
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed verifying token_hash:", e);
+        }
+      }
+
+      // 5. Map legacy hash URLs to clean paths
+      const hash = window.location.hash;
+      if (hash) {
+        if (hash.startsWith("#program/")) {
+          const id = hash.replace("#program/", "");
+          navigate(`/programmes/${id}`, { replace: true });
+        } else if (hash.startsWith("#blog/")) {
+          const id = hash.replace("#blog/", "");
+          navigate(`/blog/${id}`, { replace: true });
+        } else if (hash === "#blog") {
+          navigate("/blog", { replace: true });
+        } else if (hash.startsWith("#academy/")) {
+          const slug = hash.replace("#academy/", "");
+          navigate(`/learn/${slug}`, { replace: true });
+        } else if (hash === "#academy" || hash === "#classroom" || hash === "#lms") {
+          navigate("/dashboard", { replace: true });
+        } else if (hash === "#login") {
+          navigate("/login", { replace: true });
+        } else if (hash === "#join") {
+          navigate("/signup", { replace: true });
+        } else if (hash === "#terms") {
+          navigate("/terms", { replace: true });
+        } else if (hash === "#privacy") {
+          navigate("/privacy", { replace: true });
+        } else if (hash === "#admin" || hash === "#dashboard") {
+          navigate("/admin", { replace: true });
+        }
+      }
+    };
+
+    handleAuthRedirect();
   }, [navigate, setCurrentUser]);
 
   return null;
@@ -278,36 +428,51 @@ export default function App() {
             const isDesignatedAdmin = ADMIN_EMAILS.includes(userEmail);
             const userRole = isDesignatedAdmin ? "admin" : ((profile?.role as any) || "student");
 
-            // Ensure profile exists for Google / OAuth signups
-            if (!profile) {
+            // For admin accounts: ALWAYS ensure track is "ai-virtual-influencers" and role is "admin"
+            if (isDesignatedAdmin) {
               try {
                 await supabase.from("profiles").upsert({
                   id: session.user.id,
-                  email: session.user.email || "",
-                  name: rawMeta.full_name || rawMeta.name || session.user.email?.split("@")[0] || "Creator",
+                  email: userEmail,
+                  name: profile?.name || rawMeta.full_name || rawMeta.name || userEmail.split("@")[0] || "Admin",
+                  role: "admin",
+                  onboarding_completed: true,
+                  track: "ai-virtual-influencers",
+                  avatar_url: profile?.avatar_url || rawMeta.avatar_url || rawMeta.picture,
+                  updated_at: new Date().toISOString(),
+                });
+              } catch (e) {
+                console.warn("Failed to sync admin profile row:", e);
+              }
+            } else if (!profile) {
+              try {
+                await supabase.from("profiles").upsert({
+                  id: session.user.id,
+                  email: userEmail,
+                  name: rawMeta.full_name || rawMeta.name || userEmail.split("@")[0] || "Creator",
                   role: userRole,
-                  onboarding_completed: isDesignatedAdmin ? true : false,
+                  track: "ai-virtual-influencers",
+                  onboarding_completed: false,
                   avatar_url: rawMeta.avatar_url || rawMeta.picture,
                   created_at: new Date().toISOString(),
                 });
               } catch (e) {
-                console.warn("Failed to create profile row on OAuth sign-in:", e);
-              }
-            } else if (isDesignatedAdmin && profile.role !== "admin") {
-              try {
-                await supabase.from("profiles").update({ role: "admin", onboarding_completed: true }).eq("id", session.user.id);
-              } catch {
-                // ignore
+                console.warn("Failed to create profile row on OAuth/MagicLink sign-in:", e);
               }
             }
 
             const isCompleted = isDesignatedAdmin ? true : profile ? Boolean(profile.onboarding_completed) : false;
-            const userTrack = profile?.track && profile.track !== "none" ? profile.track : undefined;
+            // Admins are strictly locked to "ai-virtual-influencers". Normal users with legacy defaults are normalized.
+            const userTrack = isDesignatedAdmin
+              ? "ai-virtual-influencers"
+              : profile?.track && profile.track !== "none" && profile.track !== "content-creation" && profile.track !== "content-clipping"
+              ? profile.track
+              : "ai-virtual-influencers";
 
             const authUser: AuthUser = {
               id: session.user.id,
-              email: session.user.email || profile?.email || "",
-              name: profile?.name || rawMeta.full_name || rawMeta.name || session.user.email?.split("@")[0] || "Creator",
+              email: userEmail,
+              name: profile?.name || rawMeta.full_name || rawMeta.name || userEmail.split("@")[0] || "Creator",
               role: userRole,
               onboardingCompleted: isCompleted,
               track: userTrack,
@@ -318,8 +483,8 @@ export default function App() {
             setStoredUser(authUser);
             setCurrentUser(authUser);
 
-            // Clean hash parameters if returning from OAuth / magic link redirect
-            if (window.location.hash.includes("access_token")) {
+            // Clean hash or query parameters if returning from OAuth / magic link redirect
+            if (window.location.hash.includes("access_token") || window.location.search.includes("code=")) {
               window.history.replaceState(null, "", window.location.pathname);
             }
 

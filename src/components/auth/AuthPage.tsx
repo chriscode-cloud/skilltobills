@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles, Mail, KeyRound } from "lucide-react";
 import { BrandLogo } from "../BrandLogo";
 import { supabase, isSupabaseConfigured, setCustomSupabaseCredentials, clearCustomSupabaseCredentials } from "../../lib/supabase";
 import { setStoredUser, AuthUser, ADMIN_EMAILS } from "../../lib/auth";
@@ -31,18 +31,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
 
-  const [showSupaConfig, setShowSupaConfig] = useState(false);
-  const [supaUrlInput, setSupaUrlInput] = useState("");
-  const [supaKeyInput, setSupaKeyInput] = useState("");
-
   usePageMeta(
     mode === "signup" ? "Create Your Account" : "Sign In to Skill2Bills",
     "Access your programmes, lessons, and personalized creator dashboard."
   );
 
+  // Check for redirected auth errors
+  useEffect(() => {
+    const errorParam = new URLSearchParams(location.search).get("error");
+    const storedError = sessionStorage.getItem("skill2bills_auth_error");
+    if (storedError || errorParam) {
+      setErrorMessage(storedError || "Your magic link was invalid or has expired. You can sign in directly below.");
+      sessionStorage.removeItem("skill2bills_auth_error");
+    }
+  }, [location.search]);
+
   // Retrieve post-login destination
   const getDestination = (user?: AuthUser) => {
-    // If user has not completed onboarding and is not an admin, route to onboarding!
     if (user && !user.onboardingCompleted && user.role !== "admin") {
       return "/onboarding";
     }
@@ -55,8 +60,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   };
 
   // 1. Direct Instant Account Login / Creation (No external email rate limits!)
-  const handleDirectAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleDirectAuth = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErrorMessage("");
     setInfoMessage("");
 
@@ -92,12 +97,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
             .maybeSingle();
 
           if (existingProfile) {
-            isCompleted = Boolean(existingProfile.onboarding_completed);
-            if (existingProfile.track && existingProfile.track !== "none") userTrack = existingProfile.track;
+            isCompleted = isDesignatedAdmin ? true : Boolean(existingProfile.onboarding_completed);
+            if (!isDesignatedAdmin && existingProfile.track && existingProfile.track !== "none" && existingProfile.track !== "content-creation" && existingProfile.track !== "content-clipping") {
+              userTrack = existingProfile.track;
+            }
+          }
+
+          // If designated admin, ensure database row is set to "ai-virtual-influencers"
+          if (isDesignatedAdmin) {
+            await supabase.from("profiles").upsert({
+              id: existingProfile?.id || "admin-" + normalizedEmail.replace(/[^a-z0-9]/g, "-"),
+              email: normalizedEmail,
+              name: displayName,
+              role: "admin",
+              onboarding_completed: true,
+              track: "ai-virtual-influencers",
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "email" });
           }
         } catch {
           // ignore
         }
+      }
+
+      if (isDesignatedAdmin) {
+        userTrack = "ai-virtual-influencers";
       }
 
       const authUser: AuthUser = {
@@ -123,7 +147,102 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     }
   };
 
-  // 2. Google OAuth via Supabase / Google Identity
+  // 2. Send Magic Link & OTP via Supabase
+  const handleSendMagicLink = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+      setErrorMessage("Please enter a valid email address first.");
+      return;
+    }
+    setErrorMessage("");
+    setInfoMessage("");
+    setLoading(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: {
+            emailRedirectTo: `${window.location.origin}/dashboard`,
+          },
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        setIsOtpSent(true);
+        setInfoMessage(`Magic link & 6-digit code sent to ${normalizedEmail}! Click the link in your email or enter your code below.`);
+      } else {
+        setIsOtpSent(true);
+        setInfoMessage(`Ready to sign in with ${normalizedEmail}. Enter your verification code or continue directly.`);
+      }
+    } catch (err: any) {
+      console.warn("Magic link error:", err);
+      const msg = err?.message || String(err);
+      if (msg.includes("rate limit") || msg.includes("send the email") || msg.includes("over_email_send_rate_limit")) {
+        setErrorMessage("Supabase email rate limit reached (free tier restriction). Use 'Instant Sign In' below to access your account immediately!");
+      } else {
+        setErrorMessage(msg || "Could not send magic link. Use Instant Sign In below.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Verify OTP Code from email
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    const token = otpCode.trim();
+
+    if (!token) {
+      setErrorMessage("Please enter the 6-digit verification code from your email.");
+      return;
+    }
+
+    setErrorMessage("");
+    setLoading(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.verifyOtp({
+          email: normalizedEmail,
+          token,
+          type: "email",
+        });
+
+        if (error) {
+          const retry = await supabase.auth.verifyOtp({
+            email: normalizedEmail,
+            token,
+            type: "magiclink",
+          });
+          if (retry.error) throw retry.error;
+        }
+      }
+
+      const isDesignatedAdmin = ADMIN_EMAILS.includes(normalizedEmail);
+      const authUser: AuthUser = {
+        id: "usr-" + Math.random().toString(36).substring(2, 9),
+        email: normalizedEmail,
+        name: normalizedEmail.split("@")[0],
+        role: isDesignatedAdmin ? "admin" : "student",
+        onboardingCompleted: isDesignatedAdmin ? true : false,
+        track: "ai-virtual-influencers",
+        createdAt: new Date().toISOString(),
+      };
+
+      setStoredUser(authUser);
+      navigate(getDestination(authUser), { replace: true });
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Invalid or expired verification code. You can also sign in directly below.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Google OAuth via Supabase / Google Identity
   const handleGoogleLogin = async () => {
     setErrorMessage("");
     setLoading(true);
@@ -267,8 +386,66 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
             </div>
           )}
 
-          {/* Instant Direct Account Access */}
-          <form onSubmit={handleDirectAuth} className="space-y-4">
+          {/* Form Area: Either OTP verification or Standard/Magic Link sign in */}
+          {isOtpSent ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2 text-[#D4F636] text-xs font-bold font-mono">
+                  <KeyRound className="w-4 h-4" />
+                  <span>ENTER 6-DIGIT VERIFICATION CODE</span>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  We sent a magic link &amp; verification code to <strong className="text-white">{email}</strong>. Enter the code below or click the link in your email.
+                </p>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123456"
+                  className="w-full tracking-widest text-center text-xl font-mono py-3 rounded-xl bg-zinc-950 border border-zinc-700 text-white outline-none focus:border-[#D4F636] focus:ring-1 focus:ring-[#D4F636]"
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || otpCode.length < 6}
+                className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Verify Code &amp; Access Dashboard</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDirectAuth()}
+                  className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Bypass &amp; Continue Directly (Instant Access)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOtpSent(false);
+                    setOtpCode("");
+                  }}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  &larr; Use a different email
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleDirectAuth} className="space-y-4">
               {/* Google OAuth Button */}
               <button
                 type="button"
@@ -358,24 +535,37 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading || (mode === "signup" && !agreedToTerms)}
-                className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{mode === "signup" ? "Creating Account..." : "Signing In..."}</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{mode === "signup" ? "Create Account" : "Sign In"}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              <div className="space-y-2.5 pt-1">
+                <button
+                  type="submit"
+                  disabled={loading || (mode === "signup" && !agreedToTerms)}
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{mode === "signup" ? "Creating Account..." : "Signing In..."}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{mode === "signup" ? "Create Account (Instant Access)" : "Sign In (Instant Access)"}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSendMagicLink}
+                  disabled={loading || !email}
+                  className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Mail className="w-4 h-4 text-[#D4F636]" />
+                  <span>Send Magic Link &amp; Code to Email</span>
+                </button>
+              </div>
             </form>
+          )}
         </div>
       </div>
 
