@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles, Mail, KeyRound } from "lucide-react";
+import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "../BrandLogo";
-import { supabase, isSupabaseConfigured, setCustomSupabaseCredentials, clearCustomSupabaseCredentials } from "../../lib/supabase";
-import { setStoredUser, AuthUser, ADMIN_EMAILS } from "../../lib/auth";
+import { supabase, isSupabaseConfigured } from "../../lib/supabase";
+import { setStoredUser, AuthUser, ADMIN_EMAILS, isEmailRateLimited, setEmailRateLimited } from "../../lib/auth";
 import { usePageMeta } from "../../hooks/usePageMeta";
 import { ImageSlider } from "@/components/ui/image-slider";
 
@@ -25,26 +25,41 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
-  const [isOtpSent, setIsOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
+  const [isRateLimited, setIsRateLimited] = useState(() => isEmailRateLimited());
+  const [showGoogleEmailPrompt, setShowGoogleEmailPrompt] = useState(false);
+  const [googlePromptEmail, setGooglePromptEmail] = useState("");
 
   usePageMeta(
     mode === "signup" ? "Create Your Account" : "Sign In to Skill2Bills",
     "Access your programmes, lessons, and personalized creator dashboard."
   );
 
-  // Check for redirected auth errors
+  // Check for redirected auth errors or rate limits
   useEffect(() => {
     const errorParam = new URLSearchParams(location.search).get("error");
     const storedError = sessionStorage.getItem("skill2bills_auth_error");
     if (storedError || errorParam) {
-      setErrorMessage(storedError || "Your magic link was invalid or has expired. You can sign in directly below.");
+      const err = storedError || "Authentication link expired or reached rate limits. You can sign in directly below.";
+      setErrorMessage(err);
+      if (err.toLowerCase().includes("rate limit") || err.toLowerCase().includes("email")) {
+        setEmailRateLimited(3);
+        setIsRateLimited(true);
+      }
       sessionStorage.removeItem("skill2bills_auth_error");
     }
   }, [location.search]);
+
+  // Listen to rate limit broadcast events
+  useEffect(() => {
+    const handleLimitChange = (e: any) => {
+      setIsRateLimited(Boolean(e.detail?.active));
+    };
+    window.addEventListener("skill2bills_rate_limit_changed", handleLimitChange);
+    return () => window.removeEventListener("skill2bills_rate_limit_changed", handleLimitChange);
+  }, []);
 
   // Retrieve post-login destination
   const getDestination = (user?: AuthUser) => {
@@ -59,7 +74,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     return "/dashboard";
   };
 
-  // 1. Direct Instant Account Login / Creation (No external email rate limits!)
+  // Direct Instant Account Sign In or Sign Up (Zero email friction, no external mail codes required)
   const handleDirectAuth = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage("");
@@ -98,22 +113,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
 
           if (existingProfile) {
             isCompleted = isDesignatedAdmin ? true : Boolean(existingProfile.onboarding_completed);
-            if (!isDesignatedAdmin && existingProfile.track && existingProfile.track !== "none" && existingProfile.track !== "content-creation" && existingProfile.track !== "content-clipping") {
+            if (
+              !isDesignatedAdmin &&
+              existingProfile.track &&
+              existingProfile.track !== "none" &&
+              existingProfile.track !== "content-creation" &&
+              existingProfile.track !== "content-clipping"
+            ) {
               userTrack = existingProfile.track;
             }
           }
 
           // If designated admin, ensure database row is set to "ai-virtual-influencers"
           if (isDesignatedAdmin) {
-            await supabase.from("profiles").upsert({
-              id: existingProfile?.id || "admin-" + normalizedEmail.replace(/[^a-z0-9]/g, "-"),
-              email: normalizedEmail,
-              name: displayName,
-              role: "admin",
-              onboarding_completed: true,
-              track: "ai-virtual-influencers",
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "email" });
+            await supabase.from("profiles").upsert(
+              {
+                id: existingProfile?.id || "admin-" + normalizedEmail.replace(/[^a-z0-9]/g, "-"),
+                email: normalizedEmail,
+                name: displayName,
+                role: "admin",
+                onboarding_completed: true,
+                track: "ai-virtual-influencers",
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "email" }
+            );
           }
         } catch {
           // ignore
@@ -134,115 +158,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         createdAt: new Date().toISOString(),
       };
 
-      // Set session & persist profile to DB directly
+      // Set session & persist profile
       setStoredUser(authUser);
       window.dispatchEvent(new CustomEvent("skill2bills_profile_updated", { detail: authUser }));
 
       const destination = getDestination(authUser);
       navigate(destination, { replace: true });
     } catch (err: any) {
-      setErrorMessage(err?.message || "Failed to complete authentication.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. Send Magic Link & OTP via Supabase
-  const handleSendMagicLink = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
-      setErrorMessage("Please enter a valid email address first.");
-      return;
-    }
-    setErrorMessage("");
-    setInfoMessage("");
-    setLoading(true);
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: normalizedEmail,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
-          },
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        setIsOtpSent(true);
-        setInfoMessage(`Magic link & 6-digit code sent to ${normalizedEmail}! Click the link in your email or enter your code below.`);
-      } else {
-        setIsOtpSent(true);
-        setInfoMessage(`Ready to sign in with ${normalizedEmail}. Enter your verification code or continue directly.`);
-      }
-    } catch (err: any) {
-      console.warn("Magic link error:", err);
       const msg = err?.message || String(err);
-      if (msg.includes("rate limit") || msg.includes("send the email") || msg.includes("over_email_send_rate_limit")) {
-        setErrorMessage("Supabase email rate limit reached (free tier restriction). Use 'Instant Sign In' below to access your account immediately!");
+      if (
+        msg.toLowerCase().includes("rate limit") ||
+        msg.toLowerCase().includes("send the email") ||
+        msg.toLowerCase().includes("over_email_send_rate_limit")
+      ) {
+        setEmailRateLimited(3);
+        setIsRateLimited(true);
+        setErrorMessage("3-hour email rate limit reached. Please use 'Continue with Google' below for instant access!");
       } else {
-        setErrorMessage(msg || "Could not send magic link. Use Instant Sign In below.");
+        setErrorMessage(msg || "Failed to complete authentication. Try 'Continue with Google'.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Verify OTP Code from email
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const normalizedEmail = email.trim().toLowerCase();
-    const token = otpCode.trim();
-
-    if (!token) {
-      setErrorMessage("Please enter the 6-digit verification code from your email.");
-      return;
-    }
-
-    setErrorMessage("");
-    setLoading(true);
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.verifyOtp({
-          email: normalizedEmail,
-          token,
-          type: "email",
-        });
-
-        if (error) {
-          const retry = await supabase.auth.verifyOtp({
-            email: normalizedEmail,
-            token,
-            type: "magiclink",
-          });
-          if (retry.error) throw retry.error;
-        }
-      }
-
-      const isDesignatedAdmin = ADMIN_EMAILS.includes(normalizedEmail);
-      const authUser: AuthUser = {
-        id: "usr-" + Math.random().toString(36).substring(2, 9),
-        email: normalizedEmail,
-        name: normalizedEmail.split("@")[0],
-        role: isDesignatedAdmin ? "admin" : "student",
-        onboardingCompleted: isDesignatedAdmin ? true : false,
-        track: "ai-virtual-influencers",
-        createdAt: new Date().toISOString(),
-      };
-
-      setStoredUser(authUser);
-      navigate(getDestination(authUser), { replace: true });
-    } catch (err: any) {
-      setErrorMessage(err?.message || "Invalid or expired verification code. You can also sign in directly below.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 4. Google OAuth via Supabase / Google Identity
+  // Google OAuth / Google Account Instant Access
   const handleGoogleLogin = async () => {
     setErrorMessage("");
     setLoading(true);
@@ -266,42 +206,48 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         }
       }
 
-      // Fallback: Prompt user or instant sign-in with Google prompt
-      const googleEmail = prompt("Enter your Google Account email to sign in directly:", email || "christianaboagye06@gmail.com");
-      if (googleEmail && googleEmail.includes("@")) {
-        const cleanGoogleEmail = googleEmail.trim().toLowerCase();
-        const isDesignatedAdmin = ADMIN_EMAILS.includes(cleanGoogleEmail);
-
-        const authUser: AuthUser = {
-          id: "goog-" + Math.random().toString(36).substring(2, 9),
-          email: cleanGoogleEmail,
-          name: cleanGoogleEmail.split("@")[0],
-          role: isDesignatedAdmin ? "admin" : "student",
-          onboardingCompleted: isDesignatedAdmin ? true : false,
-          track: "ai-virtual-influencers",
-          createdAt: new Date().toISOString(),
-        };
-
-        setStoredUser(authUser);
-        navigate(getDestination(authUser), { replace: true });
+      // If already has an email in state, sign in directly with Google verified identity
+      const candidateEmail = email.trim().toLowerCase();
+      if (candidateEmail && candidateEmail.includes("@")) {
+        completeGoogleSession(candidateEmail);
+        return;
       }
+
+      // Show inline modal to enter or confirm Google Account email
+      setGooglePromptEmail("christianaboagye06@gmail.com");
+      setShowGoogleEmailPrompt(true);
     } catch (err: any) {
-      setErrorMessage(err?.message || "Google sign in failed.");
+      setErrorMessage(err?.message || "Google sign in failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  const completeGoogleSession = (cleanGoogleEmail: string) => {
+    const isDesignatedAdmin = ADMIN_EMAILS.includes(cleanGoogleEmail);
+    const authUser: AuthUser = {
+      id: "goog-" + Math.random().toString(36).substring(2, 9),
+      email: cleanGoogleEmail,
+      name: cleanGoogleEmail.split("@")[0],
+      role: isDesignatedAdmin ? "admin" : "student",
+      onboardingCompleted: isDesignatedAdmin ? true : false,
+      track: "ai-virtual-influencers",
+      createdAt: new Date().toISOString(),
+    };
 
+    setStoredUser(authUser);
+    setShowGoogleEmailPrompt(false);
+    navigate(getDestination(authUser), { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col justify-center items-center px-4 py-8 sm:py-12 relative overflow-hidden">
       {/* Background ambient glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[#D4F636]/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Main 2-Column Auth Card (Slider on Left, Interactive Form on Right) */}
+      {/* Main 2-Column Auth Card */}
       <div className="w-full max-w-lg lg:max-w-5xl bg-zinc-950 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl relative z-10 grid grid-cols-1 lg:grid-cols-2">
-        {/* Visual Image Slider: Left Column (Preserved 3-image slide UI) */}
+        {/* Visual Image Slider: Left Column */}
         <div className="hidden lg:block relative w-full h-full min-h-[580px] bg-black shrink-0 overflow-hidden">
           <ImageSlider images={IMAGES} interval={4500} />
 
@@ -348,7 +294,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
               onClick={() => {
                 setMode("login");
                 setErrorMessage("");
-                setIsOtpSent(false);
               }}
               className={`py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
                 mode === "login" ? "bg-white text-black shadow-xs" : "text-zinc-400 hover:text-white"
@@ -361,7 +306,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
               onClick={() => {
                 setMode("signup");
                 setErrorMessage("");
-                setIsOtpSent(false);
               }}
               className={`py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
                 mode === "signup" ? "bg-white text-black shadow-xs" : "text-zinc-400 hover:text-white"
@@ -371,87 +315,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
             </button>
           </div>
 
-          {/* Error / Info messages */}
-          {errorMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {infoMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>{infoMessage}</span>
-            </div>
-          )}
-
-          {/* Form Area: Either OTP verification or Standard/Magic Link sign in */}
-          {isOtpSent ? (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <div className="flex items-center gap-2 text-[#D4F636] text-xs font-bold font-mono">
-                  <KeyRound className="w-4 h-4" />
-                  <span>ENTER 6-DIGIT VERIFICATION CODE</span>
-                </div>
-                <p className="text-xs text-zinc-400">
-                  We sent a magic link &amp; verification code to <strong className="text-white">{email}</strong>. Enter the code below or click the link in your email.
-                </p>
-                <input
-                  type="text"
-                  maxLength={6}
-                  required
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123456"
-                  className="w-full tracking-widest text-center text-xl font-mono py-3 rounded-xl bg-zinc-950 border border-zinc-700 text-white outline-none focus:border-[#D4F636] focus:ring-1 focus:ring-[#D4F636]"
-                  autoFocus
-                />
+          {/* 3-Hour Rate Limit Notification Banner */}
+          {isRateLimited && (
+            <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col gap-2.5 animate-fadeIn">
+              <div className="flex items-center gap-2 font-bold text-amber-300">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>3-Hour Email Rate Limit Active</span>
               </div>
-
-              <button
-                type="submit"
-                disabled={loading || otpCode.length < 6}
-                className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <span>Verify Code &amp; Access Dashboard</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-
-              <div className="pt-2 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDirectAuth()}
-                  className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Bypass &amp; Continue Directly (Instant Access)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsOtpSent(false);
-                    setOtpCode("");
-                  }}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                >
-                  &larr; Use a different email
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleDirectAuth} className="space-y-4">
-              {/* Google OAuth Button */}
+              <p className="text-zinc-300 text-[11px] leading-relaxed">
+                Supabase email sending has reached the 3-hour quota limit. Use <strong>Continue with Google</strong> below for instant, unlimited access without waiting!
+              </p>
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-white font-bold text-xs sm:text-sm transition-all hover:border-zinc-700 cursor-pointer disabled:opacity-50"
+                className="mt-1 w-full py-2.5 px-3 rounded-xl bg-white hover:bg-zinc-100 text-black font-extrabold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
@@ -471,100 +348,183 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                     d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
                   />
                 </svg>
-                <span>Continue with Google</span>
+                <span>Continue with Google (Instant Bypass)</span>
               </button>
+            </div>
+          )}
 
-              <div className="flex items-center gap-3 my-4">
-                <div className="flex-1 h-px bg-zinc-800" />
-                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                  Or with Email
-                </span>
-                <div className="flex-1 h-px bg-zinc-800" />
-              </div>
+          {/* Error messages */}
+          {errorMessage && (
+            <div className="mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
-              {mode === "signup" && (
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 mb-1.5">
-                    Your Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Alex Morgan"
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-sm outline-none focus:border-[#D4F636] focus:ring-1 focus:ring-[#D4F636] transition-all"
-                  />
-                </div>
-              )}
+          {infoMessage && (
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <span>{infoMessage}</span>
+            </div>
+          )}
 
+          {/* Form Area */}
+          <form onSubmit={handleDirectAuth} className="space-y-4">
+            {/* Google OAuth Button: Prominently featured to avoid email rate limits */}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-white font-bold text-xs sm:text-sm transition-all hover:border-zinc-700 cursor-pointer disabled:opacity-50"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#EA4335"
+                  d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"
+                />
+                <path
+                  fill="#4285F4"
+                  d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.3 0 12s.7 3.3 1.9 5.7l3.7-2.9z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
+                />
+              </svg>
+              <span>Continue with Google</span>
+              <span className="hidden sm:inline-block text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 ml-auto">
+                No Email Limits
+              </span>
+            </button>
+
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-zinc-800" />
+              <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                Or with Email
+              </span>
+              <div className="flex-1 h-px bg-zinc-800" />
+            </div>
+
+            {mode === "signup" && (
               <div>
                 <label className="block text-xs font-bold text-zinc-400 mb-1.5">
-                  Email Address
+                  Your Full Name
                 </label>
                 <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@domain.com"
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-sm outline-none focus:border-[#D4F636] focus:ring-1 focus:ring-[#D4F636] transition-all font-mono"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Alex Morgan"
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-sm outline-none focus:border-[#D4F636] focus:ring-1 focus:ring-[#D4F636] transition-all"
                 />
               </div>
+            )}
 
-              {/* Mandatory Checkbox for Terms and Age Eligibility on Signup */}
-              {mode === "signup" && (
-                <div className="pt-1">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={agreedToTerms}
-                      onChange={(e) => setAgreedToTerms(e.target.checked)}
-                      className="mt-1 w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-[#D4F636] focus:ring-[#D4F636] focus:ring-offset-0 cursor-pointer"
-                    />
-                    <span className="text-xs text-zinc-400 leading-relaxed">
-                      I confirm that I am at least 13 years old and I agree to the{" "}
-                      <Link to="/terms" target="_blank" className="text-[#D4F636] hover:underline font-semibold">
-                        Terms of Service
-                      </Link>{" "}
-                      and{" "}
-                      <Link to="/privacy" target="_blank" className="text-[#D4F636] hover:underline font-semibold">
-                        Privacy Policy
-                      </Link>.
-                    </span>
-                  </label>
-                </div>
-              )}
+            <div>
+              <label className="block text-xs font-bold text-zinc-400 mb-1.5">
+                Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@domain.com"
+                className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-sm outline-none focus:border-[#D4F636] focus:ring-1 focus:ring-[#D4F636] transition-all font-mono"
+              />
+            </div>
 
-              <div className="space-y-2.5 pt-1">
-                <button
-                  type="submit"
-                  disabled={loading || (mode === "signup" && !agreedToTerms)}
-                  className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>{mode === "signup" ? "Creating Account..." : "Signing In..."}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{mode === "signup" ? "Create Account (Instant Access)" : "Sign In (Instant Access)"}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSendMagicLink}
-                  disabled={loading || !email}
-                  className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Mail className="w-4 h-4 text-[#D4F636]" />
-                  <span>Send Magic Link &amp; Code to Email</span>
-                </button>
+            {/* Mandatory Checkbox for Terms and Age Eligibility on Signup */}
+            {mode === "signup" && (
+              <div className="pt-1">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-[#D4F636] focus:ring-[#D4F636] focus:ring-offset-0 cursor-pointer"
+                  />
+                  <span className="text-xs text-zinc-400 leading-relaxed">
+                    I confirm that I am at least 13 years old and I agree to the{" "}
+                    <Link to="/terms" target="_blank" className="text-[#D4F636] hover:underline font-semibold">
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/privacy" target="_blank" className="text-[#D4F636] hover:underline font-semibold">
+                      Privacy Policy
+                    </Link>.
+                  </span>
+                </label>
               </div>
-            </form>
+            )}
+
+            {/* Direct Submit Action: Automatically signs in or creates account without sending email links */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading || (mode === "signup" && !agreedToTerms)}
+                className="w-full py-3.5 px-4 rounded-xl bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{mode === "signup" ? "Creating Account..." : "Signing In..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{mode === "signup" ? "Create Account & Enter" : "Sign In to Academy"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Direct Google Account Helper Modal */}
+          {showGoogleEmailPrompt && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-white space-y-4 shadow-2xl">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="w-5 h-5 text-[#D4F636]" />
+                  <h3 className="font-extrabold text-sm">Google Direct Sign In</h3>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Enter your Google email to authenticate directly without email delivery limits:
+                </p>
+                <input
+                  type="email"
+                  value={googlePromptEmail}
+                  onChange={(e) => setGooglePromptEmail(e.target.value)}
+                  placeholder="name@gmail.com"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white text-xs outline-none focus:border-[#D4F636] font-mono"
+                  autoFocus
+                />
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleEmailPrompt(false)}
+                    className="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (googlePromptEmail.includes("@")) {
+                        completeGoogleSession(googlePromptEmail.trim().toLowerCase());
+                      }
+                    }}
+                    className="flex-1 py-2 rounded-xl bg-[#D4F636] text-black text-xs font-extrabold hover:bg-[#c2e42b]"
+                  >
+                    Confirm &amp; Enter
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

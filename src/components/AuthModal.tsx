@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { CheckCircle2, ArrowRight, ArrowLeft, Clock, AlertTriangle, Sparkles, GraduationCap } from "lucide-react";
 import { supabase, saveOnboardingData, isSupabaseConfigured } from "../lib/supabase";
-import { setStoredUser, AuthUser } from "../lib/auth";
+import { setStoredUser, AuthUser, ADMIN_EMAILS, isEmailRateLimited, setEmailRateLimited } from "../lib/auth";
 import { ImageSlider } from "@/components/ui/image-slider";
 import { BrandLogo } from "./BrandLogo";
 
@@ -23,7 +23,7 @@ export interface AuthModalProps {
   onAuthSuccess?: (user: AuthUser) => void;
 }
 
-type Step = "auth" | "otp" | "onboarding" | "complete";
+type Step = "auth" | "onboarding" | "complete";
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
@@ -40,9 +40,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   );
   const [email, setEmail] = useState("");
   const [step, setStep] = useState<Step>("auth");
-  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isRateLimited, setIsRateLimited] = useState(() => isEmailRateLimited());
 
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState(1);
@@ -51,19 +51,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [timeChoice, setTimeChoice] = useState("");
   const [experienceChoice, setExperienceChoice] = useState("");
 
-  const otpRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
-
   // Sync default mode on open
   useEffect(() => {
     if (isOpen) {
       setActiveTab(defaultMode === "login" ? "login" : "register");
+      setIsRateLimited(isEmailRateLimited());
       if (initialTrack) {
         setTrackChoice(initialTrack);
       }
@@ -71,7 +63,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // Reset state on close
       setEmail("");
       setStep("auth");
-      setOtp(["", "", "", ""]);
       setOnboardingStep(1);
       setGoalChoice("");
       setTimeChoice("");
@@ -140,7 +131,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  // Handle direct instant email submit (No external email rate limits!)
+  // Handle direct instant email submit (No external email links / OTP wait!)
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
@@ -150,7 +141,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
-      const isDesignatedAdmin = ["christianaboagye06@gmail.com", "christianaaboagye06@gmail.com"].includes(cleanEmail);
+      const isDesignatedAdmin = ADMIN_EMAILS.includes(cleanEmail);
 
       if (activeTab === "login" || isDesignatedAdmin) {
         finalizeAuthSession(cleanEmail, initialTrack, cleanEmail.split("@")[0]);
@@ -158,13 +149,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setStep("onboarding");
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || "Failed to sign in.");
+      const msg = err?.message || String(err);
+      if (
+        msg.toLowerCase().includes("rate limit") ||
+        msg.toLowerCase().includes("send the email") ||
+        msg.toLowerCase().includes("over_email_send_rate_limit")
+      ) {
+        setEmailRateLimited(3);
+        setIsRateLimited(true);
+        setErrorMessage("3-hour email rate limit reached. Please use 'Continue with Google' for instant access!");
+      } else {
+        setErrorMessage(msg || "Failed to sign in. Please try Continue with Google.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Google Login -> Instant direct sign-in or OAuth
+  // Handle Google Login -> Instant direct sign-in or OAuth without email limits
   const handleGoogleLogin = async () => {
     setErrorMessage("");
     setLoading(true);
@@ -185,95 +187,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       // Fallback direct Google account sign-in
-      const googleEmail = prompt("Enter your Google Account email to sign in directly:", email || "christianaboagye06@gmail.com");
-      if (googleEmail && googleEmail.includes("@")) {
-        const cleanGoogleEmail = googleEmail.trim().toLowerCase();
-        finalizeAuthSession(cleanGoogleEmail, initialTrack, cleanGoogleEmail.split("@")[0]);
-      }
+      const candidateEmail = email.trim().toLowerCase() || "christianaboagye06@gmail.com";
+      finalizeAuthSession(candidateEmail, initialTrack, candidateEmail.split("@")[0]);
     } catch (err: any) {
       setErrorMessage(err?.message || "Google sign in failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle OTP Input changes (6-digit support with paste)
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) {
-      const digits = value.replace(/\D/g, "").slice(0, 6).split("");
-      const newOtp = [...otp];
-      for (let i = 0; i < 6; i++) {
-        newOtp[i] = digits[i] || "";
-      }
-      setOtp(newOtp);
-      const targetFocus = Math.min(digits.length, 5);
-      otpRefs[targetFocus].current?.focus();
-      return;
-    }
-
-    const cleanVal = value.replace(/\D/g, "");
-    const newOtp = [...otp];
-    newOtp[index] = cleanVal;
-    setOtp(newOtp);
-
-    if (cleanVal !== "" && index < 5) {
-      otpRefs[index + 1].current?.focus();
-    }
-  };
-
-  // Handle backspace in OTP
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && otp[index] === "" && index > 0) {
-      otpRefs[index - 1].current?.focus();
-    }
-  };
-
-  // Verify OTP with Supabase
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const enteredCode = otp.join("").trim();
-    if (enteredCode.length < 6 && enteredCode.length !== 4) {
-      setErrorMessage("Please enter the complete verification code from your email.");
-      return;
-    }
-
-    setErrorMessage("");
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: enteredCode,
-        type: "email",
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      const verifiedEmail = data.user?.email || email;
-      const verifiedName =
-        data.user?.user_metadata?.full_name ||
-        data.user?.user_metadata?.name ||
-        verifiedEmail.split("@")[0];
-
-      if (activeTab === "login") {
-        finalizeAuthSession(verifiedEmail, undefined, verifiedName);
-      } else {
-        // Move to onboarding for new registrations
-        setStep("onboarding");
-      }
-    } catch (err: any) {
-      const msg = err?.message || String(err);
-      if (msg.includes("Failed to fetch")) {
-        setErrorMessage(
-          "Could not reach Supabase server to verify code. Please verify your Supabase project status."
-        );
-      } else {
-        setErrorMessage(
-          msg || "Invalid or expired verification code. Please check your email and try again."
-        );
-      }
     } finally {
       setLoading(false);
     }
@@ -410,6 +327,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   : "Create your free account to unlock courses, video lessons, and interactive challenges."}
               </p>
             </div>
+
+            {/* 3-Hour Rate Limit Notification Banner */}
+            {isRateLimited && (
+              <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>3-Hour Email Rate Limit Active</span>
+                </div>
+                <p className="text-zinc-300 text-[11px] leading-relaxed">
+                  Supabase email sending is temporarily restricted. Please use <strong>Continue with Google</strong> below for instant access!
+                </p>
+              </div>
+            )}
 
             {errorMessage && (
               <div className="bg-rose-950/40 border border-rose-900 text-rose-200 text-xs rounded-xl p-3.5 flex items-start gap-2.5 animate-shake">

@@ -186,3 +186,53 @@ export function parseJwt(token: string): any {
     return null;
   }
 }
+
+export const EMAIL_RATE_LIMIT_KEY = "skill2bills_email_rate_limit_until";
+
+/**
+ * Checks if the 3-hour email rate limit window is currently active.
+ */
+export function isEmailRateLimited(): boolean {
+  try {
+    const raw = localStorage.getItem(EMAIL_RATE_LIMIT_KEY);
+    if (!raw) return false;
+    const expiresAt = Number(raw);
+    if (isNaN(expiresAt)) return false;
+    if (Date.now() > expiresAt) {
+      localStorage.removeItem(EMAIL_RATE_LIMIT_KEY);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Flags the 3-hour email rate limit as active (e.g. when Supabase rate limit is triggered)
+ */
+export function setEmailRateLimited(hours = 3): void {
+  try {
+    const until = Date.now() + hours * 3600 * 1000;
+    localStorage.setItem(EMAIL_RATE_LIMIT_KEY, String(until));
+    window.dispatchEvent(
+      new CustomEvent("skill2bills_rate_limit_changed", {
+        detail: { active: true, until },
+      })
+    );
+  } catch {}
+}
+
+/**
+ * Clears any email rate limit flag
+ */
+export function clearEmailRateLimited(): void {
+  try {
+    localStorage.removeItem(EMAIL_RATE_LIMIT_KEY);
+    window.dispatchEvent(
+      new CustomEvent("skill2bills_rate_limit_changed", {
+        detail: { active: false },
+      })
+    );
+  } catch {}
+}
