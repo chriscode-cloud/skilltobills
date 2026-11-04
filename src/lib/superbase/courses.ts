@@ -568,24 +568,22 @@ export async function getAllLearnerActivity(
       }
     }
 
-    // B. Check standard client query
-    if (progressRecords.length === 0) {
-      try {
-        const { data: userRows, error } = await supabase
-          .from("user_progress")
-          .select("*");
-        if (!error && userRows) {
-          userRows.forEach((r: any) => {
-            const key = `${r.user_id}-${r.lesson_id}`;
-            if (!seenRecordKeys.has(key)) {
-              seenRecordKeys.add(key);
-              progressRecords.push(r);
-            }
-          });
-        }
-      } catch (err) {
-        console.warn("Standard client user_progress query error:", err);
+    // B. Check standard client query (merge any records visible to active session)
+    try {
+      const { data: userRows, error } = await supabase
+        .from("user_progress")
+        .select("*");
+      if (!error && userRows) {
+        userRows.forEach((r: any) => {
+          const key = `${r.user_id}-${r.lesson_id}`;
+          if (!seenRecordKeys.has(key)) {
+            seenRecordKeys.add(key);
+            progressRecords.push(r);
+          }
+        });
       }
+    } catch (err) {
+      console.warn("Standard client user_progress query error:", err);
     }
   }
 
@@ -615,7 +613,85 @@ export async function getAllLearnerActivity(
       }
     });
 
-    // Also check current user's local progress
+    // Also check current active session in localStorage & Supabase Auth
+    let currentSessionEmail = "christianaboagye06@gmail.com";
+    let currentSessionId = "christianaboagye06@gmail.com";
+    let currentSessionName = "Christian";
+
+    try {
+      const authUserRaw =
+        localStorage.getItem("skill2bills_auth_user_v2") ||
+        localStorage.getItem("skill2bills_auth_user_v1");
+      if (authUserRaw) {
+        const au = JSON.parse(authUserRaw);
+        if (au?.email) currentSessionEmail = au.email.toLowerCase().trim();
+        if (au?.id) currentSessionId = au.id;
+        if (au?.name) currentSessionName = au.name;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: suData } = await supabase.auth.getUser();
+        if (suData?.user) {
+          if (suData.user.email) currentSessionEmail = suData.user.email.toLowerCase().trim();
+          if (suData.user.id) currentSessionId = suData.user.id;
+          if (suData.user.user_metadata?.name) currentSessionName = suData.user.user_metadata.name;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const lmsProgressRaw = localStorage.getItem("skill2bills_lms_progress_v2");
+    if (lmsProgressRaw) {
+      try {
+        const lms = JSON.parse(lmsProgressRaw);
+        const completedIds: string[] = lms.completedLessonIds || [];
+        const nowIso = new Date().toISOString();
+
+        completedIds.forEach((lesId) => {
+          const pathway = getLessonPathway(lesId);
+          const targetKeys = [
+            `${currentSessionId}-${lesId}`,
+            `${currentSessionEmail}-${lesId}`,
+          ];
+
+          // If session is an admin account, guarantee both common alias spellings connect
+          if (
+            currentSessionEmail === "christianaboagye06@gmail.com" ||
+            currentSessionEmail === "christianaaboagye06@gmail.com"
+          ) {
+            targetKeys.push(`christianaboagye06@gmail.com-${lesId}`);
+            targetKeys.push(`christianaaboagye06@gmail.com-${lesId}`);
+          }
+
+          targetKeys.forEach((key) => {
+            if (!seenRecordKeys.has(key)) {
+              seenRecordKeys.add(key);
+              const targetUid = key.substring(0, key.lastIndexOf(`-${lesId}`));
+              progressRecords.push({
+                user_id: targetUid,
+                user_email: currentSessionEmail,
+                user_name: currentSessionName,
+                lesson_id: lesId,
+                course_slug: pathway,
+                started_at: nowIso,
+                last_active_at: nowIso,
+                completed_at: nowIso,
+                is_completed: true,
+              });
+            }
+          });
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    // Also check individual user progress keys in local storage
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith("skill2bills_user_progress_")) {
@@ -662,16 +738,24 @@ export async function getAllLearnerActivity(
 
   // Guarantee non-empty list by using all registered profiles
   profiles.forEach((profile) => {
-    const userRecords = userProgressMap.get(profile.id) || [];
-    
-    // Also try matching by email if ID differed (e.g. Supabase Auth vs profile)
-    if (userRecords.length === 0 && profile.email) {
+    const userRecords: any[] = [];
+    if (userProgressMap.has(profile.id)) {
+      userRecords.push(...userProgressMap.get(profile.id)!);
+    }
+
+    // Union merge by email as well to combine records logged under auth UUID or email
+    if (profile.email) {
+      const emailLower = profile.email.toLowerCase().trim();
       for (const [uid, recs] of userProgressMap.entries()) {
-        const matchingRec = recs.find((r) => r.user_email?.toLowerCase() === profile.email.toLowerCase());
-        if (matchingRec) {
-          userRecords.push(...recs);
-          break;
-        }
+        if (uid === profile.id) continue;
+        recs.forEach((r) => {
+          if (
+            (r.user_email && r.user_email.toLowerCase().trim() === emailLower) ||
+            uid.toLowerCase().trim() === emailLower
+          ) {
+            userRecords.push(r);
+          }
+        });
       }
     }
 

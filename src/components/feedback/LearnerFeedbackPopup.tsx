@@ -198,7 +198,7 @@ export const LearnerFeedbackPopup: React.FC<LearnerFeedbackPopupProps> = ({
               </DialogTitle>
             </div>
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#D4F636] bg-[#D4F636]/10 px-2.5 py-1 rounded-full border border-[#D4F636]/20">
-              {completedCount >= 2 ? "2 Lessons Done" : "Learner Feedback"}
+              {completedCount >= 1 ? `${completedCount} ${completedCount === 1 ? 'Lesson' : 'Lessons'} Done` : "Learner Feedback"}
             </span>
           </div>
           <DialogDescription className="text-xs text-zinc-400">

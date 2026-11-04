@@ -585,6 +585,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                 <option value="ai-virtual-influencers" className="bg-[#121216] text-white">
                   AI Content Creation (19 Lessons — Mini-Launch)
                 </option>
+                <option value="all" className="bg-[#121216] text-white">
+                  All Programmes (Combined Roster — 29 Lessons)
+                </option>
                 <option value="content-clipping" className="bg-[#121216] text-white">
                   Content Clipping &amp; Short-Form (6 Lessons)
                 </option>
@@ -2269,7 +2272,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                                 {fb.track_title || fb.track_slug || "Skill2Bills"}
                               </span>
                               <span className="text-[10px] text-slate-500">
-                                Completed: {fb.metadata?.completedCount || 2} lessons
+                                Completed: {fb.metadata?.completedCount ?? (fb as any).completed_count ?? (fb as any).completedCount ?? "—"} lessons
                               </span>
                             </td>
 
