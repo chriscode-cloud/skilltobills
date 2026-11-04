@@ -388,3 +388,57 @@ create policy "Admins can view feedback"
   on public.feedback for select
   using (public.is_admin() or auth.uid() = user_id);
 
+-- 14. Backfill all existing auth.users into public.profiles
+insert into public.profiles (id, email, name, role, track, goal, time_commitment, experience_level, created_at, updated_at)
+select
+  u.id,
+  u.email,
+  coalesce(u.raw_user_meta_data->>'name', u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)),
+  case when u.email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com') then 'admin' else 'student' end,
+  'AI & Virtual Influencers',
+  'Scale my personal brand',
+  '5-15',
+  'Beginner',
+  u.created_at,
+  now()
+from auth.users u
+on conflict (id) do update set
+  email = excluded.email,
+  role = case when excluded.email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com') then 'admin' else public.profiles.role end;
+
+-- 15. Safe RPC function returning all registered users from auth.users + profiles
+create or replace function public.get_all_registered_users()
+returns table (
+  id uuid,
+  email text,
+  name text,
+  role text,
+  track text,
+  goal text,
+  time_commitment text,
+  experience_level text,
+  created_at timestamp with time zone,
+  last_sign_in_at timestamp with time zone
+) security definer as $$
+begin
+  return query
+  select
+    u.id,
+    u.email::text,
+    coalesce(p.name, split_part(u.email, '@', 1))::text,
+    case when u.email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com') then 'admin' else coalesce(p.role, 'student') end::text,
+    coalesce(p.track, 'AI & Virtual Influencers')::text,
+    coalesce(p.goal, 'Scale my personal brand')::text,
+    coalesce(p.time_commitment, '5-15')::text,
+    coalesce(p.experience_level, 'Beginner')::text,
+    u.created_at,
+    u.last_sign_in_at
+  from auth.users u
+  left join public.profiles p on u.id = p.id
+  order by u.created_at desc;
+end;
+$$ language plpgsql;
+
+grant execute on function public.get_all_registered_users() to anon, authenticated;
+
+

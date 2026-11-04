@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { CheckCircle2, ArrowRight, ArrowLeft, Clock, AlertTriangle, Sparkles, GraduationCap } from "lucide-react";
-import { supabase, saveOnboardingData, isSupabaseConfigured } from "../lib/supabase";
+import React, { useState, useEffect, useRef } from "react";
+import { CheckCircle2, ArrowRight, ArrowLeft, Clock, AlertTriangle, Sparkles, GraduationCap, KeyRound, Mail } from "lucide-react";
+import { supabase, saveOnboardingData, isSupabaseConfigured, sendMagicLink, verifyOtpCode } from "../lib/supabase";
 import { setStoredUser, AuthUser, ADMIN_EMAILS, isEmailRateLimited, setEmailRateLimited } from "../lib/auth";
 import { ImageSlider } from "@/components/ui/image-slider";
 import { BrandLogo } from "./BrandLogo";
@@ -23,7 +23,7 @@ export interface AuthModalProps {
   onAuthSuccess?: (user: AuthUser) => void;
 }
 
-type Step = "auth" | "onboarding" | "complete";
+type Step = "auth" | "code" | "onboarding" | "complete";
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
@@ -44,6 +44,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMessage, setErrorMessage] = useState("");
   const [isRateLimited, setIsRateLimited] = useState(() => isEmailRateLimited());
 
+  // 8-Digit OTP State & Input Refs
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(8).fill(""));
+  const [resendCountdown, setResendCountdown] = useState(60);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [trackChoice, setTrackChoice] = useState(initialTrack || "ai-virtual-influencers");
@@ -63,6 +68,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // Reset state on close
       setEmail("");
       setStep("auth");
+      setOtpDigits(Array(8).fill(""));
+      setResendCountdown(60);
       setOnboardingStep(1);
       setGoalChoice("");
       setTimeChoice("");
@@ -71,6 +78,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMessage("");
     }
   }, [isOpen, defaultMode, initialTrack]);
+
+  // Resend countdown timer
+  useEffect(() => {
+    let timer: any;
+    if (step === "code" && resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [step, resendCountdown]);
 
   if (!isOpen) return null;
 
@@ -112,7 +130,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     // Set course hash if target is academy
     if (targetRedirect.startsWith("#academy")) {
-      // If a track was chosen, route directly into that course
       let targetCourseSlug = "ai-virtual-influencers";
       if (formattedTrack === "ai-influencer" || formattedTrack === "ai-virtual-influencers") {
         targetCourseSlug = "ai-virtual-influencers";
@@ -131,23 +148,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  // Handle direct instant email submit (No external email links / OTP wait!)
+  // Dispatch magic link & 8-digit OTP code to user's email
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) return;
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setErrorMessage("Please enter a valid email address.");
+      return;
+    }
 
     setErrorMessage("");
     setLoading(true);
 
     try {
-      const isDesignatedAdmin = ADMIN_EMAILS.includes(cleanEmail);
-
-      if (activeTab === "login" || isDesignatedAdmin) {
-        finalizeAuthSession(cleanEmail, initialTrack, cleanEmail.split("@")[0]);
-      } else {
-        setStep("onboarding");
+      if (isSupabaseConfigured && supabase) {
+        await sendMagicLink(cleanEmail, window.location.origin);
       }
+
+      // Persist to leads roster immediately so admin identifies every registered creator
+      try {
+        const storedEmails: string[] = JSON.parse(localStorage.getItem("skill2bills_registered_emails") || "[]");
+        if (!storedEmails.includes(cleanEmail)) {
+          storedEmails.unshift(cleanEmail);
+          localStorage.setItem("skill2bills_registered_emails", JSON.stringify(storedEmails));
+        }
+
+        const creatorLeads = JSON.parse(localStorage.getItem("skill2bill_creator_leads") || "[]");
+        if (!creatorLeads.some((l: any) => l.email === cleanEmail)) {
+          const newLead = {
+            id: "lead-" + Math.random().toString(36).substring(2, 9),
+            email: cleanEmail,
+            track: initialTrack || trackChoice || "AI & Virtual Influencers",
+            goal: "Scale personal brand & monetize",
+            time_commitment: "5-15",
+            experience_level: "Beginner",
+            created_at: new Date().toISOString(),
+          };
+          creatorLeads.unshift(newLead);
+          localStorage.setItem("skill2bill_creator_leads", JSON.stringify(creatorLeads));
+        }
+        window.dispatchEvent(new Event("skill2bills_profile_updated"));
+      } catch {
+        // ignore
+      }
+
+      // Advance to 8-digit OTP verification screen
+      setStep("code");
+      setResendCountdown(60);
+      setOtpDigits(Array(8).fill(""));
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 100);
     } catch (err: any) {
       const msg = err?.message || String(err);
       if (
@@ -159,14 +210,147 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setIsRateLimited(true);
         setErrorMessage("3-hour email rate limit reached. Please use 'Continue with Google' for instant access!");
       } else {
-        setErrorMessage(msg || "Failed to sign in. Please try Continue with Google.");
+        setErrorMessage(msg || "Could not send verification email. Please try Google sign in.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Google Login -> Instant direct sign-in or OAuth without email limits
+  // Verify the 8-digit OTP code with Supabase
+  const handleVerifyCode = async (codeToVerify?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const token = (codeToVerify || otpDigits.join("")).trim();
+
+    if (token.length !== 8) {
+      setErrorMessage("Please enter all 8 digits of your verification code.");
+      return;
+    }
+
+    setErrorMessage("");
+    setLoading(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await verifyOtpCode(cleanEmail, token);
+      }
+
+      const isDesignatedAdmin = ADMIN_EMAILS.includes(cleanEmail);
+
+      if (activeTab === "login" || isDesignatedAdmin) {
+        finalizeAuthSession(cleanEmail, initialTrack, cleanEmail.split("@")[0]);
+      } else {
+        setStep("onboarding");
+      }
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      setErrorMessage(msg || "Invalid or expired 8-digit code. Please check your email and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resend the 8-digit OTP code & magic link
+  const handleResendCode = async () => {
+    if (resendCountdown > 0) return;
+    const cleanEmail = email.trim().toLowerCase();
+    setErrorMessage("");
+    setLoading(true);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await sendMagicLink(cleanEmail, window.location.origin);
+      }
+      setResendCountdown(60);
+      setOtpDigits(Array(8).fill(""));
+      inputRefs.current[0]?.focus();
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      if (
+        msg.toLowerCase().includes("rate limit") ||
+        msg.toLowerCase().includes("send the email") ||
+        msg.toLowerCase().includes("over_email_send_rate_limit")
+      ) {
+        setEmailRateLimited(3);
+        setIsRateLimited(true);
+        setErrorMessage("3-hour email rate limit reached. Please use Continue with Google.");
+      } else {
+        setErrorMessage(msg || "Failed to resend code.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 8-digit OTP box change handler
+  const handleOtpChange = (index: number, val: string) => {
+    const clean = val.replace(/[^0-9a-zA-Z]/g, "");
+    if (!clean) {
+      const newOtp = [...otpDigits];
+      newOtp[index] = "";
+      setOtpDigits(newOtp);
+      return;
+    }
+
+    if (clean.length > 1) {
+      const chars = clean.slice(0, 8).split("");
+      const newOtp = [...otpDigits];
+      chars.forEach((c, idx) => {
+        if (index + idx < 8) newOtp[index + idx] = c;
+      });
+      setOtpDigits(newOtp);
+      const nextIdx = Math.min(index + chars.length, 7);
+      inputRefs.current[nextIdx]?.focus();
+      if (newOtp.filter(Boolean).length === 8) {
+        handleVerifyCode(newOtp.join(""));
+      }
+      return;
+    }
+
+    const newOtp = [...otpDigits];
+    newOtp[index] = clean;
+    setOtpDigits(newOtp);
+    if (index < 7) {
+      inputRefs.current[index + 1]?.focus();
+    }
+    if (newOtp.filter(Boolean).length === 8) {
+      handleVerifyCode(newOtp.join(""));
+    }
+  };
+
+  // Key navigation for 8-digit OTP boxes
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!otpDigits[index] && index > 0) {
+        inputRefs.current[index - 1]?.focus();
+        const newOtp = [...otpDigits];
+        newOtp[index - 1] = "";
+        setOtpDigits(newOtp);
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 7) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  // Paste 8-digit code
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/[^0-9a-zA-Z]/g, "").slice(0, 8);
+    if (!pasted) return;
+    const newOtp = [...otpDigits];
+    for (let i = 0; i < 8; i++) {
+      newOtp[i] = pasted[i] || "";
+    }
+    setOtpDigits(newOtp);
+    const targetFocus = Math.min(pasted.length, 7);
+    inputRefs.current[targetFocus]?.focus();
+    if (pasted.length === 8) {
+      handleVerifyCode(pasted);
+    }
+  };
+
+  // Google Login -> Instant direct sign-in or OAuth
   const handleGoogleLogin = async () => {
     setErrorMessage("");
     setLoading(true);
@@ -196,7 +380,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Handle Onboarding Questions
+  // Onboarding Selection Handlers
   const handleSelectTrack = (choice: string) => {
     setTrackChoice(choice);
     setOnboardingStep(2);
@@ -253,7 +437,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             Build Your Digital Retainer Empire
           </h3>
           <p className="text-[11px] sm:text-xs text-zinc-300 max-w-sm leading-relaxed font-medium line-clamp-2">
-            Master viral video clipping, live stream engineering, and automated YouTube channels in our interactive student classroom.
+            Master AI virtual influencers, viral video clipping, live stream engineering, and automated YouTube channels.
           </p>
         </div>
       </div>
@@ -323,8 +507,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </h3>
               <p className="text-zinc-400 text-xs sm:text-sm mt-1.5 max-w-sm mx-auto leading-relaxed">
                 {activeTab === "login"
-                  ? "Sign in to resume your course modules, quizzes, and digital assets."
-                  : "Create your free account to unlock courses, video lessons, and interactive challenges."}
+                  ? "Sign in with your email or Google account to access your courses."
+                  : "Create your free account to unlock lessons, challenges, and video courses."}
               </p>
             </div>
 
@@ -389,25 +573,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="flex items-center my-4">
                 <div className="flex-1 border-t border-zinc-850"></div>
-                <span className="px-3 text-xs font-medium text-zinc-500">— or continue with email —</span>
+                <span className="px-3 text-xs font-medium text-zinc-500">— or with email code &amp; magic link —</span>
                 <div className="flex-1 border-t border-zinc-850"></div>
               </div>
 
-              {/* Option B: Email Entry */}
+              {/* Option B: Email Submission (Sends Magic Link & 8-digit OTP code) */}
               <form onSubmit={handleEmailSubmit} className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-zinc-400 mb-1.5">
                     Your Email Address
                   </label>
-                  <input
-                    type="email"
-                    required
-                    disabled={loading}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="student@skill2bills.com"
-                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-[#D4F636] focus:border-[#D4F636] outline-none transition-all disabled:opacity-60 rounded-xl"
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      disabled={loading}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="student@skill2bills.com"
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 text-sm focus:ring-2 focus:ring-[#D4F636] focus:border-[#D4F636] outline-none transition-all disabled:opacity-60 rounded-xl font-mono"
+                    />
+                    <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5 pointer-events-none" />
+                  </div>
                 </div>
 
                 <button
@@ -420,7 +607,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   ) : (
                     <>
                       <span>
-                        {activeTab === "login" ? "Sign In & Enter Academy" : "Continue to Academy Setup"}
+                        {activeTab === "login" ? "Sign In & Send 8-Digit Code" : "Create Account & Send Code"}
                       </span>
                       <ArrowRight className="w-4 h-4" />
                     </>
@@ -430,7 +617,142 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             <div className="text-center text-[11px] text-zinc-500">
-              By continuing, you agree to Skill2Bills' Terms of Service and Student Community Guidelines.
+              We'll send a magic link and an 8-digit verification code to confirm your email.
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: 8-DIGIT OTP VERIFICATION SCREEN */}
+        {step === "code" && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#D4F636]/10 border border-[#D4F636]/30 text-[#D4F636] flex items-center justify-center mx-auto mb-3">
+                <KeyRound className="w-7 h-7 text-[#D4F636]" />
+              </div>
+
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                Enter 8-Digit Code
+              </h3>
+              <p className="text-zinc-400 text-xs sm:text-sm mt-1.5 max-w-sm mx-auto leading-relaxed">
+                We've sent a magic link and an 8-digit verification code to{" "}
+                <span className="text-white font-semibold underline decoration-[#D4F636]/50 underline-offset-2">{email}</span>.
+              </p>
+              <p className="text-zinc-500 text-[11px] mt-1">
+                Enter the 8 digits below or click the magic link directly in your email.
+              </p>
+            </div>
+
+            {errorMessage && (
+              <div className="bg-rose-950/40 border border-rose-900 text-rose-200 text-xs rounded-xl p-3.5 flex items-start gap-2.5 animate-shake">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                <span className="font-semibold leading-normal">{errorMessage}</span>
+              </div>
+            )}
+
+            {/* 8-Digit Input Slots */}
+            <div className="py-2">
+              <div className="flex items-center justify-center gap-1 sm:gap-2">
+                {otpDigits.map((digit, idx) => (
+                  <React.Fragment key={idx}>
+                    <input
+                      ref={(el) => { inputRefs.current[idx] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                      onPaste={handleOtpPaste}
+                      disabled={loading}
+                      className="w-8 h-11 sm:w-10 sm:h-13 text-center text-lg sm:text-xl font-bold font-mono bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:border-[#D4F636] focus:ring-2 focus:ring-[#D4F636]/30 outline-none transition-all disabled:opacity-50"
+                    />
+                    {idx === 3 && (
+                      <span className="text-zinc-600 font-bold px-0.5 select-none">-</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => handleVerifyCode()}
+                disabled={loading || otpDigits.join("").length !== 8}
+                className="w-full bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold py-3.5 rounded-xl text-sm transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Verify &amp; Enter Academy</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center justify-between text-xs px-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("auth");
+                    setErrorMessage("");
+                  }}
+                  className="text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Change email</span>
+                </button>
+
+                {resendCountdown > 0 ? (
+                  <span className="text-zinc-500 font-medium flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Resend in {resendCountdown}s</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={loading}
+                    className="text-[#D4F636] hover:underline font-bold transition-all cursor-pointer"
+                  >
+                    Resend 8-digit code
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Google alternative fallback */}
+            <div className="pt-2 border-t border-zinc-850">
+              <div className="text-center text-[11px] text-zinc-500 mb-2">
+                Didn't receive email or reached rate limit?
+              </div>
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full border border-zinc-800 hover:bg-zinc-900 text-zinc-300 hover:text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>Continue with Google</span>
+              </button>
             </div>
           </div>
         )}

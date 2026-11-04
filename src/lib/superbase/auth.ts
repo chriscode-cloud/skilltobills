@@ -23,8 +23,9 @@ export async function signInWithGoogle(redirectTo: string = window.location.orig
 }
 
 export async function sendMagicLink(email: string, redirectTo: string = window.location.origin) {
+  const cleanEmail = email.trim().toLowerCase();
   const { data, error } = await supabase.auth.signInWithOtp({
-    email,
+    email: cleanEmail,
     options: {
       emailRedirectTo: redirectTo,
     },
@@ -33,14 +34,56 @@ export async function sendMagicLink(email: string, redirectTo: string = window.l
   return data;
 }
 
-export async function verifyOtpCode(email: string, token: string, type: "email" | "magiclink" = "email") {
-  const { data, error } = await supabase.auth.verifyOtp({
-    email,
-    token,
-    type,
-  });
-  if (error) throw error;
-  return data;
+export async function verifyOtpCode(
+  email: string,
+  token: string,
+  type: "email" | "magiclink" | "signup" = "email"
+) {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanToken = token.trim();
+
+  // Primary verification attempt
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type,
+    });
+    if (!error && data?.session) {
+      return data;
+    }
+    if (error) throw error;
+    return data;
+  } catch (err: any) {
+    // Fallback attempts if type mismatch (e.g., signup vs email)
+    if (type === "email") {
+      try {
+        const { data: fallbackData, error: fallbackError } = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token: cleanToken,
+          type: "magiclink",
+        });
+        if (!fallbackError && fallbackData?.session) {
+          return fallbackData;
+        }
+      } catch {
+        // continue
+      }
+      try {
+        const { data: signupData, error: signupError } = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token: cleanToken,
+          type: "signup",
+        });
+        if (!signupError && signupData?.session) {
+          return signupData;
+        }
+      } catch {
+        // continue
+      }
+    }
+    throw err;
+  }
 }
 
 export async function signOut() {

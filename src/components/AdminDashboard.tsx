@@ -29,19 +29,32 @@ import {
   Check,
   X,
   MessageSquare,
-  Star
+  Star,
+  Key,
+  FileText,
+  UploadCloud,
+  Copy,
+  CheckCheck,
+  Shield
 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import {
   getAllProfiles,
   getAllFeedbacks,
+  fetchSupabaseAuthUsers,
+  syncAuthUsersToProfiles,
+  batchImportEmails,
+  DEFAULT_SQL_SYNC_SCRIPT,
   SupabaseProfile,
   FeedbackEntry,
   isSupabaseConfigured,
   supabase,
   supabaseUrl,
   supabaseAnonKey,
+  supabaseServiceRoleKey,
   setCustomSupabaseCredentials,
+  setCustomServiceRoleKey,
+  clearCustomServiceRoleKey,
   clearCustomSupabaseCredentials,
 } from "../lib/supabase";
 import { COURSE_TRACKS } from "../data/contentData";
@@ -59,6 +72,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
   const [timeRange, setTimeRange] = useState<"1D" | "1W" | "1M" | "3M" | "6M" | "1Y">("6M");
   const [inputUrl, setInputUrl] = useState(supabaseUrl || "");
   const [inputKey, setInputKey] = useState(supabaseAnonKey || "");
+  const [inputServiceKey, setInputServiceKey] = useState(supabaseServiceRoleKey || "");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [testMessage, setTestMessage] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "leads" | "tracks" | "feedback" | "settings">("overview");
@@ -70,6 +84,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
   const [newTime, setNewTime] = useState("5-15");
   const [newExp, setNewExp] = useState("Beginner");
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Supabase Auth Sync Hub State
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [sqlModalOpen, setSqlModalOpen] = useState(false);
+  const [batchImportModalOpen, setBatchImportModalOpen] = useState(false);
+  const [batchInputText, setBatchInputText] = useState("");
+  const [batchTrackChoice, setBatchTrackChoice] = useState("AI & Virtual Influencers");
+  const [serviceKeyTesting, setServiceKeyTesting] = useState(false);
+  const [serviceKeyMessage, setServiceKeyMessage] = useState("");
+  const [authUsersList, setAuthUsersList] = useState<SupabaseProfile[]>([]);
+  const [isSyncingToProfiles, setIsSyncingToProfiles] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const triggerNotice = (msg: string) => {
     setActionNotice(msg);
@@ -277,6 +303,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
     }
   };
 
+  // Fetch users directly from Supabase Auth via Service Role key
+  const handleFetchAuthUsers = async (customKey?: string) => {
+    const keyToUse = customKey || inputServiceKey;
+    if (!keyToUse || !keyToUse.trim()) {
+      setServiceKeyMessage("Please enter your Supabase service_role secret key.");
+      return;
+    }
+    setServiceKeyTesting(true);
+    setServiceKeyMessage("");
+    try {
+      const res = await fetchSupabaseAuthUsers(keyToUse.trim());
+      if (res.error) {
+        setServiceKeyMessage(`Supabase Auth error: ${res.error}`);
+      } else {
+        setAuthUsersList(res.users);
+        setServiceKeyMessage(`Found ${res.users.length} registered accounts in Supabase Auth!`);
+        setCustomServiceRoleKey(keyToUse.trim());
+        await fetchProfiles(false);
+        triggerNotice(`Identified ${res.users.length} registered creator accounts!`);
+      }
+    } catch (err: any) {
+      setServiceKeyMessage(`Failed to query Supabase Auth: ${err?.message || err}`);
+    } finally {
+      setServiceKeyTesting(false);
+    }
+  };
+
+  // Synchronize auth users into public.profiles database table
+  const handleSyncToProfiles = async () => {
+    if (authUsersList.length === 0) return;
+    setIsSyncingToProfiles(true);
+    try {
+      const res = await syncAuthUsersToProfiles(authUsersList);
+      triggerNotice(`Successfully synchronized ${res.count} users into public.profiles!`);
+      await fetchProfiles(false);
+    } catch (err: any) {
+      triggerNotice(`Sync error: ${err?.message || err}`);
+    } finally {
+      setIsSyncingToProfiles(false);
+    }
+  };
+
+  // Batch import pasted emails (e.g. from Supabase dashboard table)
+  const handleBatchImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!batchInputText.trim()) return;
+    try {
+      const imported = await batchImportEmails(batchInputText, batchTrackChoice);
+      if (imported.length > 0) {
+        triggerNotice(`Imported & registered ${imported.length} creator emails!`);
+        setBatchInputText("");
+        setBatchImportModalOpen(false);
+        await fetchProfiles(false);
+      } else {
+        triggerNotice("No valid email addresses found in text.");
+      }
+    } catch (err: any) {
+      triggerNotice(`Import error: ${err?.message || err}`);
+    }
+  };
+
+  // Copy 1-Click SQL script
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(DEFAULT_SQL_SYNC_SCRIPT);
+    setCopiedSql(true);
+    triggerNotice("Copied 1-Click SQL Sync Script to clipboard!");
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
+
   // Clear all local leads
   const handleClearLocalRoster = () => {
     if (window.confirm("Are you sure you want to clear all locally cached signups?")) {
@@ -385,6 +481,269 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                   className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-xs cursor-pointer"
                 >
                   Save Lead
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 1. Supabase Auth Service Role Key Sync Modal */}
+      {syncModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-[#D4F636] flex items-center justify-center shadow-xs">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Supabase Auth Direct Sync</h3>
+                  <p className="text-[11px] text-slate-500">Fetch all 11 registered creator accounts from auth.users</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-700">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] leading-relaxed text-slate-600">
+                <p className="font-semibold text-slate-800 mb-1">Where to get your Supabase Service Role Key:</p>
+                <ol className="list-decimal pl-4 space-y-0.5 text-slate-600">
+                  <li>Open your <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">Supabase Project Dashboard</a></li>
+                  <li>Navigate to <strong>Project Settings → API</strong></li>
+                  <li>Under <strong>Project API keys</strong>, copy the <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-slate-900">service_role secret</code> key</li>
+                </ol>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Supabase Service Role Secret Key
+                </label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={inputServiceKey}
+                  onChange={(e) => setInputServiceKey(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:border-slate-900 transition-all"
+                />
+              </div>
+
+              {serviceKeyMessage && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium border ${
+                    serviceKeyMessage.includes("Found") || serviceKeyMessage.includes("Successfully")
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-red-50 text-red-800 border-red-200"
+                  }`}
+                >
+                  {serviceKeyMessage}
+                </div>
+              )}
+
+              {authUsersList.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 max-h-48 overflow-y-auto space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 pb-1 border-b border-slate-200">
+                    <span>{authUsersList.length} Accounts Identified</span>
+                    <span className="text-emerald-600">Ready to sync</span>
+                  </div>
+                  {authUsersList.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between text-[11px] py-0.5 text-slate-600">
+                      <span className="font-mono truncate max-w-[240px]">{u.email}</span>
+                      <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded-full font-bold">{u.role}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSyncModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  Close
+                </button>
+
+                {authUsersList.length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={isSyncingToProfiles}
+                    onClick={handleSyncToProfiles}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {isSyncingToProfiles ? "Syncing..." : `Sync All ${authUsersList.length} to Profiles`}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={serviceKeyTesting || !inputServiceKey.trim()}
+                    onClick={() => handleFetchAuthUsers()}
+                    className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {serviceKeyTesting ? "Connecting to Supabase..." : "Fetch Auth Accounts"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. 1-Click SQL Sync Script Modal */}
+      {sqlModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-[#D4F636] flex items-center justify-center shadow-xs">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">1-Click Supabase SQL Sync Script</h3>
+                  <p className="text-[11px] text-slate-500">Backfills all 11 auth accounts into profiles &amp; configures auto-sync</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSqlModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900 flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Permanent 2-Step Solution:</p>
+                  <p className="text-emerald-800 mt-0.5">
+                    1. Click <strong>"Copy SQL Script"</strong> below.<br/>
+                    2. Go to your <a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noreferrer" className="font-bold underline text-emerald-950">Supabase SQL Editor</a>, paste and click <strong>"Run"</strong>. Done!
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative">
+                <pre className="text-[10px] font-mono bg-slate-900 text-slate-100 p-4 rounded-2xl overflow-x-auto max-h-64 leading-relaxed border border-slate-800">
+                  {DEFAULT_SQL_SYNC_SCRIPT}
+                </pre>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="absolute top-3 right-3 bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-md cursor-pointer"
+                >
+                  {copiedSql ? <CheckCheck className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5 text-black" />}
+                  <span>{copiedSql ? "Copied!" : "Copy SQL"}</span>
+                </button>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between">
+                <a
+                  href="https://supabase.com/dashboard/project/_/sql"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1"
+                >
+                  <span>Open Supabase SQL Editor</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSqlModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopySql}
+                    className="bg-slate-900 hover:bg-black text-[#D4F636] font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs"
+                  >
+                    {copiedSql ? "Copied to Clipboard!" : "Copy Full SQL Script"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Batch Import 11 Emails Modal */}
+      {batchImportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-[#D4F636] flex items-center justify-center shadow-xs">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Quick Paste 11 Supabase Emails</h3>
+                  <p className="text-[11px] text-slate-500">Instantly populate your pilot roster with your 11 emails</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBatchImport} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Paste emails (separated by commas, lines, or spaces)
+                </label>
+                <textarea
+                  rows={6}
+                  placeholder={`user1@example.com\nuser2@example.com\nuser3@example.com`}
+                  value={batchInputText}
+                  onChange={(e) => setBatchInputText(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:border-slate-900 transition-all resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Default Assigned Programme
+                </label>
+                <select
+                  value={batchTrackChoice}
+                  onChange={(e) => setBatchTrackChoice(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-900"
+                >
+                  <option value="AI & Virtual Influencers">AI &amp; Virtual Influencers (Primary Programme)</option>
+                  <option value="Content Clipping & Short-Form Video">Content Clipping &amp; Short-Form Video</option>
+                  <option value="Live Streaming Mastery">Live Streaming Mastery</option>
+                  <option value="TikTok Shop & Faceless Affiliate">TikTok Shop &amp; Faceless Affiliate</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setBatchImportModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!batchInputText.trim()}
+                  className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  Import All Emails
                 </button>
               </div>
             </form>
@@ -707,6 +1066,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                 </div>
               </div>
 
+              {/* Overview Quick Sync Callout Bar */}
+              <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-black text-white p-4 sm:p-5 rounded-2xl border border-[#D4F636]/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#D4F636] text-black flex items-center justify-center shrink-0 shadow-xs">
+                    <Sparkles className="w-5 h-5 text-black" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <span>Supabase Auth: 11 Registered Accounts Sitting in Database</span>
+                      <span className="text-[10px] text-[#D4F636] font-semibold bg-[#D4F636]/10 px-2 py-0.5 rounded-full border border-[#D4F636]/20">
+                        {profiles.length} Active in Pilot
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Supabase stores registered emails in <code className="text-[#D4F636] font-mono">auth.users</code>. Use Direct Key Sync or the 1-Click SQL Script to identify all 11 creators.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setSyncModalOpen(true)}
+                    className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
+                  >
+                    Sync 11 Accounts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSqlModalOpen(true)}
+                    className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+                  >
+                    1-Click SQL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchImportModalOpen(true)}
+                    className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs px-3 py-2 rounded-xl transition-all cursor-pointer"
+                  >
+                    Paste Emails
+                  </button>
+                </div>
+              </div>
+
               {/* Bottom Row: Track Leaderboard & Recent Leads */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 {/* Left Lower: Track Selection Breakdown Leaderboard (5-col) */}
@@ -894,17 +1296,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                   </div>
                 </div>
 
+                {/* Supabase 11 Auth Users Live Sync Hub Banner */}
+                <div className="mb-6 bg-gradient-to-r from-slate-950 via-slate-900 to-black text-white border border-[#D4F636]/30 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                  <div className="absolute right-0 top-0 w-80 h-80 bg-[#D4F636]/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5 max-w-2xl">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-[#D4F636] text-black text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                          <Sparkles className="w-3 h-3 text-black" /> Supabase Auth Integration
+                        </span>
+                        <span className="text-xs text-zinc-300 font-bold">
+                          11 Registered Accounts in Supabase Auth
+                        </span>
+                      </div>
+                      <h3 className="text-base font-extrabold text-white tracking-tight">
+                        Identify &amp; Sync All 11 Supabase Registered Learners
+                      </h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Supabase Auth stores registered user accounts in the internal <code className="text-[#D4F636] font-mono font-semibold">auth.users</code> system. Use one of our 3 instant sync methods to populate your pilot roster with all 11 registered creator accounts.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSyncModalOpen(true)}
+                        className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>Service Key Sync</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSqlModalOpen(true)}
+                        className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>1-Click SQL Script</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBatchImportModalOpen(true)}
+                        className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>Paste 11 Emails</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500 font-semibold text-xs">
-                        <th className="pb-3 font-semibold">Creator Email</th>
+                        <th className="pb-3 font-semibold">Creator Email &amp; Role</th>
                         <th className="pb-3 font-semibold">Assigned Track</th>
-                        <th className="pb-3 font-semibold">Goal</th>
+                        <th className="pb-3 font-semibold">Goal &amp; Focus</th>
                         <th className="pb-3 font-semibold text-center">Commitment</th>
                         <th className="pb-3 font-semibold text-center">Exp. Level</th>
-                        <th className="pb-3 font-semibold text-right">Status</th>
+                        <th className="pb-3 font-semibold text-right">Verification &amp; Source</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
@@ -921,12 +1375,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                             <Mail className="w-8 h-8 mx-auto mb-2 text-slate-400" />
                             <p className="font-semibold text-slate-700">No leads recorded yet</p>
                             <p className="text-slate-500 text-[11px] mt-1">
-                              Complete the signup flow on the website or click "Add Creator" to enter test data.
+                              Click "Service Key Sync", "1-Click SQL Script", or "Paste 11 Emails" above to populate the roster.
                             </p>
                           </td>
                         </tr>
                       ) : (
                         filteredProfiles.map((lead) => {
+                          const isAdmin =
+                            ["christianaboagye06@gmail.com", "christianaaboagye06@gmail.com"].includes(
+                              lead.email.toLowerCase().trim()
+                            ) || lead.role === "admin";
+
                           const dateString = lead.created_at
                             ? new Date(lead.created_at).toLocaleString("en-US", {
                                 month: "short",
@@ -948,18 +1407,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                                   >
                                     {lead.email}
                                   </button>
+                                  {isAdmin ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-slate-900 text-[#D4F636] border border-[#D4F636]/40 px-2 py-0.5 rounded-full shrink-0 shadow-2xs">
+                                      <Shield className="w-2.5 h-2.5 text-[#D4F636]" /> Admin
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                      Student
+                                    </span>
+                                  )}
                                   {copiedEmail === lead.email && (
-                                    <span className="text-[10px] text-emerald-600 font-bold">
+                                    <span className="text-[10px] text-emerald-600 font-bold shrink-0">
                                       Copied!
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[10px] text-slate-500 font-mono">{dateString}</span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-slate-500 font-mono">{dateString}</span>
+                                  {lead.source && (
+                                    <span className="text-[9px] text-slate-400 font-medium">• {lead.source}</span>
+                                  )}
+                                </div>
                               </td>
 
                               <td className="py-4 px-3">
                                 <span className="text-slate-800 font-semibold truncate block max-w-[200px]">
-                                  {lead.track || "Pending Selection"}
+                                  {lead.track || "AI & Virtual Influencers"}
                                 </span>
                               </td>
 
@@ -982,9 +1455,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                               </td>
 
                               <td className="py-4 pl-3 text-right">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-black bg-[#D4F636] px-2.5 py-1 rounded-full shadow-2xs">
-                                  <CheckCircle2 className="w-3 h-3" /> Pilot Confirmed
-                                </span>
+                                {isAdmin ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-black bg-[#D4F636] px-2.5 py-1 rounded-full shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3" /> Super Admin
+                                  </span>
+                                ) : lead.source === "Supabase Auth" ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 border border-emerald-200 px-2.5 py-1 rounded-full shadow-2xs">
+                                    <Sparkles className="w-3 h-3 text-emerald-600" /> Supabase Auth
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900 bg-slate-200/80 px-2.5 py-1 rounded-full shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Pilot Confirmed
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -1373,6 +1856,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                           />
                         </div>
 
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Service Role Secret Key (Enables Direct auth.users Sync)
+                          </label>
+                          <input
+                            type="password"
+                            value={inputServiceKey}
+                            onChange={(e) => setInputServiceKey(e.target.value)}
+                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (service_role secret)"
+                            className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-900 outline-none transition-all"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Found in Supabase Dashboard → Settings → API → Project API keys → service_role. Required to identify all 11 auth accounts.
+                          </p>
+                        </div>
+
                         {testMessage && (
                           <div
                             className={`p-3 rounded-xl text-xs font-medium border ${
@@ -1423,7 +1922,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                             type="button"
                             disabled={!inputUrl.trim() || !inputKey.trim()}
                             onClick={() => {
-                              setCustomSupabaseCredentials(inputUrl, inputKey);
+                              setCustomSupabaseCredentials(inputUrl, inputKey, inputServiceKey);
                             }}
                             className="px-4 py-2 rounded-xl text-xs font-bold bg-[#D4F636] hover:bg-[#c2e42b] text-black transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
                           >
@@ -1446,11 +1945,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                     </div>
                   )}
 
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
-                    <div className="text-xs font-bold text-slate-900 mb-2">Expected Supabase Schema</div>
-                    <code className="text-[11px] text-slate-800 font-mono bg-slate-100 p-3 rounded-xl block leading-relaxed overflow-x-auto border border-slate-200">
-                      {`create table profiles (\n  id text primary key,\n  email text not null,\n  track text,\n  goal text,\n  time_commitment text,\n  experience_level text,\n  created_at timestamp with time zone default timezone('utc'::text, now())\n);`}
-                    </code>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Supabase Auth Synchronization Tools</div>
+                        <p className="text-[11px] text-slate-500">
+                          Tools to identify and synchronize your 11 registered creator accounts.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSyncModalOpen(true)}
+                          className="bg-[#D4F636] hover:bg-[#c2e42b] text-black font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs"
+                        >
+                          Direct API Sync
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSqlModalOpen(true)}
+                          className="bg-slate-900 hover:bg-black text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs"
+                        >
+                          View SQL Script
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="pt-4 flex items-center justify-between border-t border-slate-200">
