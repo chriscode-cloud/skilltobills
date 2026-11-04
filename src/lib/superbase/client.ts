@@ -74,7 +74,7 @@ const getRawUrl = (): string => {
       // Ignore
     }
   }
-  const envUrl = import.meta.env.VITE_SUPABASE_URL;
+  const envUrl = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : undefined;
   if (envUrl && !isPlaceholder(envUrl)) return envUrl;
   return DEFAULT_PROJECT_URL;
 };
@@ -88,9 +88,8 @@ const getRawKey = (): string => {
       // Ignore
     }
   }
-  const envKey =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const env = typeof import.meta !== "undefined" ? import.meta.env : undefined;
+  const envKey = env?.VITE_SUPABASE_PUBLISHABLE_KEY || env?.VITE_SUPABASE_ANON_KEY;
   if (envKey && !isPlaceholder(envKey)) return envKey;
   return DEFAULT_PROJECT_KEY;
 };
@@ -104,7 +103,7 @@ const getRawServiceRoleKey = (): string => {
       // Ignore
     }
   }
-  const envServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+  const envServiceKey = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY : undefined;
   if (envServiceKey && !isPlaceholder(envServiceKey)) return envServiceKey.trim();
   return "";
 };

@@ -6,6 +6,11 @@ import { CourseResources } from "./CourseResources";
 import { LMS_COURSES } from "./lmsData";
 import { Course, UserProgressState } from "./types";
 import { supabase, isSupabaseConfigured } from "../../lib/supabase";
+import {
+  recordLessonOpen,
+  recordLessonComplete,
+  recordLessonIncomplete,
+} from "../../lib/superbase/courses";
 
 interface LmsAppProps {
   onExitToWebsite: () => void;
@@ -151,8 +156,10 @@ export const LmsApp: React.FC<LmsAppProps> = ({
 
     if (isCompleted) {
       newCompleted = progress.completedLessonIds.filter((id) => id !== lessonId);
+      await recordLessonIncomplete(lessonId, activeCourse.slug).catch(() => {});
     } else {
       newCompleted = [...progress.completedLessonIds, lessonId];
+      await recordLessonComplete(lessonId, activeCourse.slug).catch(() => {});
     }
 
     setProgress((prev) => ({
@@ -160,29 +167,6 @@ export const LmsApp: React.FC<LmsAppProps> = ({
       completedLessonIds: newCompleted,
       lastActiveLessonId: lessonId,
     }));
-
-    // If Supabase is available, sync to user_progress table
-    if (isSupabaseConfigured) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          if (!isCompleted) {
-            await supabase.from("user_progress").upsert({
-              user_id: user.id,
-              lesson_id: lessonId,
-              completed_at: new Date().toISOString(),
-            });
-          } else {
-            await supabase
-              .from("user_progress")
-              .delete()
-              .match({ user_id: user.id, lesson_id: lessonId });
-          }
-        }
-      } catch {
-        // Offline fallback
-      }
-    }
   };
 
   // Handler: Select lesson and open course player
@@ -190,6 +174,7 @@ export const LmsApp: React.FC<LmsAppProps> = ({
     setActiveLessonId(lessonId);
     setProgress((prev) => ({ ...prev, lastActiveLessonId: lessonId }));
     setCurrentTab("course");
+    recordLessonOpen(lessonId, activeCourse.slug).catch(() => {});
   };
 
   // Continue course from dashboard

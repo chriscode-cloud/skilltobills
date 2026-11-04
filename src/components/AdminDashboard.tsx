@@ -35,7 +35,9 @@ import {
   UploadCloud,
   Copy,
   CheckCheck,
-  Shield
+  Shield,
+  GraduationCap,
+  BookOpen
 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import {
@@ -58,6 +60,12 @@ import {
   clearCustomSupabaseCredentials,
 } from "../lib/supabase";
 import { COURSE_TRACKS } from "../data/contentData";
+import {
+  getAllLearnerActivity,
+  LearnerProgressItem,
+  LearnerActivityMetrics,
+  COURSE_LESSONS_INFO,
+} from "../lib/superbase/courses";
 
 interface AdminDashboardProps {
   onBackToWebsite: () => void;
@@ -75,7 +83,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
   const [inputServiceKey, setInputServiceKey] = useState(supabaseServiceRoleKey || "");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [testMessage, setTestMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "leads" | "tracks" | "feedback" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "leads" | "tracks" | "feedback" | "activity" | "settings">("overview");
+
+  // Learner Activity Tracking State (14-Day AI Content Creation Mini-Launch)
+  const [selectedPathway, setSelectedPathway] = useState<string>("ai-virtual-influencers");
+  const [learnerActivityList, setLearnerActivityList] = useState<LearnerProgressItem[]>([]);
+  const [learnerMetrics, setLearnerMetrics] = useState<LearnerActivityMetrics>({
+    enrolledLearners: 0,
+    startedLearning: 0,
+    notStarted: 0,
+    inProgress: 0,
+    completed: 0,
+  });
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityStatusFilter, setActivityStatusFilter] = useState<"all" | "started" | "not_started" | "in_progress" | "completed">("all");
+  const [activitySearchTerm, setActivitySearchTerm] = useState("");
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -124,6 +146,146 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
     }
   };
 
+  // Fetch real learner activity from Supabase user_progress & profiles
+  const fetchLearnerActivity = async (pathwaySlug = selectedPathway, silent = false) => {
+    if (!silent) setActivityLoading(true);
+    try {
+      const res = await getAllLearnerActivity(pathwaySlug);
+      setLearnerActivityList(res.items);
+      setLearnerMetrics(res.metrics);
+    } catch (err) {
+      console.warn("Failed to load learner activity:", err);
+    } finally {
+      if (!silent) setActivityLoading(false);
+    }
+  };
+
+  // Sync learner activity on pathway change or custom activity event
+  useEffect(() => {
+    fetchLearnerActivity(selectedPathway, false);
+
+    const handleActivityUpdated = () => {
+      fetchLearnerActivity(selectedPathway, true);
+    };
+
+    window.addEventListener("skill2bills_activity_updated", handleActivityUpdated);
+    window.addEventListener("skill2bills_profile_updated", handleActivityUpdated);
+
+    // Auto-refresh learner metrics every 5 seconds to ensure live sync
+    const activityPoll = setInterval(() => {
+      fetchLearnerActivity(selectedPathway, true);
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("skill2bills_activity_updated", handleActivityUpdated);
+      window.removeEventListener("skill2bills_profile_updated", handleActivityUpdated);
+      clearInterval(activityPoll);
+    };
+  }, [selectedPathway]);
+
+  // Filtered learner activity items for table
+  const filteredLearnerActivity = useMemo(() => {
+    let list = learnerActivityList;
+
+    if (activityStatusFilter === "started") {
+      list = list.filter((item) => item.status === "In Progress" || item.status === "Completed");
+    } else if (activityStatusFilter === "not_started") {
+      list = list.filter((item) => item.status === "Not Started");
+    } else if (activityStatusFilter === "in_progress") {
+      list = list.filter((item) => item.status === "In Progress");
+    } else if (activityStatusFilter === "completed") {
+      list = list.filter((item) => item.status === "Completed");
+    }
+
+    if (activitySearchTerm.trim()) {
+      const q = activitySearchTerm.toLowerCase().trim();
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          item.email.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [learnerActivityList, activityStatusFilter, activitySearchTerm]);
+
+  // Formatter for learner last active timestamp
+  const formatLastActive = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "—";
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMin = Math.floor(diffMs / (1000 * 60));
+
+      const isToday =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      if (isToday) {
+        if (diffMin < 2) return "Just now";
+        if (diffMin < 60) return `${diffMin}m ago`;
+        return `Today, ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      }
+
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday =
+        d.getDate() === yesterday.getDate() &&
+        d.getMonth() === yesterday.getMonth() &&
+        d.getFullYear() === yesterday.getFullYear();
+
+      if (isYesterday) {
+        return `Yesterday, ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      }
+
+      return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    } catch {
+      return "—";
+    }
+  };
+
+  // Export Learner Activity to CSV
+  const handleExportLearnerActivityCSV = () => {
+    const pathwayInfo = COURSE_LESSONS_INFO[selectedPathway] || { title: selectedPathway, totalLessons: 19 };
+    const headers = [
+      "Learner Name",
+      "Email Address",
+      "Programme Pathway",
+      "Lessons Completed",
+      "Total Lessons",
+      "Progress %",
+      "Status",
+      "Started At",
+      "Last Active At"
+    ];
+    const rows = filteredLearnerActivity.map((item) => [
+      `"${item.name.replace(/"/g, '""')}"`,
+      `"${item.email.replace(/"/g, '""')}"`,
+      `"${pathwayInfo.title}"`,
+      item.completedCount,
+      item.totalLessons,
+      `${item.progressPercent}%`,
+      `"${item.status}"`,
+      item.startedAt ? `"${item.startedAt}"` : '"—"',
+      item.lastActiveAt ? `"${item.lastActiveAt}"` : '"—"',
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `skill2bills_${selectedPathway}_learner_activity_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    triggerNotice(`Exported ${filteredLearnerActivity.length} learner records to CSV`);
+  };
+
   useEffect(() => {
     fetchProfiles(true);
 
@@ -143,6 +305,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
             (payload) => {
               console.log("Supabase Realtime profile change detected:", payload);
               fetchProfiles(false);
+              fetchLearnerActivity(selectedPathway, true);
             }
           )
           .subscribe();
@@ -154,6 +317,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
     // 2. Local broadcast listener for instant cross-tab & component updates
     const handleLocalUpdate = () => {
       fetchProfiles(false);
+      fetchLearnerActivity(selectedPathway, true);
     };
     window.addEventListener("skill2bills_profile_updated", handleLocalUpdate);
     window.addEventListener("skill2bills_auth_changed", handleLocalUpdate);
@@ -173,7 +337,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
       window.removeEventListener("storage", handleLocalUpdate);
       clearInterval(pollTimer);
     };
-  }, []);
+  }, [selectedPathway]);
 
   // Compute live analytics from real profiles
   const analytics = useMemo(() => {
@@ -381,6 +545,364 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
       setProfiles([]);
       triggerNotice("Local roster cleared");
     }
+  };
+
+  const renderLearnerActivitySection = (isFullPage = false) => {
+    const currentPathwayInfo = COURSE_LESSONS_INFO[selectedPathway] || {
+      title: "AI & Virtual Influencers",
+      totalLessons: 19,
+      lessonPrefix: "les-ai-",
+    };
+
+    return (
+      <section className={`bg-[#0f0f13] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-xl text-white ${isFullPage ? "min-h-[700px]" : ""}`}>
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-white/10">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#D4F636] animate-pulse" />
+              <span className="text-[10px] uppercase font-black tracking-widest text-black bg-[#D4F636] px-2.5 py-0.5 rounded-full shadow-xs">
+                14-Day Mini-Launch Tracker
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Learner Activity &amp; Pathway Analytics
+              </h2>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Live engagement across <strong>{currentPathwayInfo.title}</strong> ({currentPathwayInfo.totalLessons} lessons total). Synced with Supabase <code className="text-[#D4F636] font-mono text-[11px]">user_progress</code>.
+            </p>
+          </div>
+
+          {/* Pathway Selector & Actions */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 bg-[#17171d] border border-white/10 rounded-2xl px-3 py-1.5 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400">Programme:</span>
+              <select
+                value={selectedPathway}
+                onChange={(e) => setSelectedPathway(e.target.value)}
+                className="bg-transparent text-xs font-black text-[#D4F636] focus:outline-none cursor-pointer"
+              >
+                <option value="ai-virtual-influencers" className="bg-[#121216] text-white">
+                  AI Content Creation (19 Lessons — Mini-Launch)
+                </option>
+                <option value="content-clipping" className="bg-[#121216] text-white">
+                  Content Clipping &amp; Short-Form (6 Lessons)
+                </option>
+                <option value="live-streaming" className="bg-[#121216] text-white">
+                  Live Streaming Mastery (2 Lessons)
+                </option>
+                <option value="youtube-automation" className="bg-[#121216] text-white">
+                  Faceless YouTube Automation (2 Lessons)
+                </option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => fetchLearnerActivity(selectedPathway, false)}
+              disabled={activityLoading}
+              title="Refresh Learner Progress"
+              className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${activityLoading ? "animate-spin text-[#D4F636]" : ""}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportLearnerActivityCSV}
+              className="bg-[#D4F636] hover:bg-[#c2e42b] text-black text-xs font-black px-3.5 py-2 rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Download className="w-3.5 h-3.5 text-black" />
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 5 Metric Cards matching Task Specification */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 my-6">
+          {/* 1. Enrolled Learners */}
+          <div className="bg-[#16161c] border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:border-white/20 transition-all">
+            <div className="flex items-center justify-between text-zinc-400 text-xs font-bold">
+              <span>Enrolled Learners</span>
+              <Users className="w-4 h-4 text-zinc-400" />
+            </div>
+            <div className="my-2.5">
+              <div className="text-3xl font-black text-white tracking-tight">
+                {learnerMetrics.enrolledLearners}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-0.5">Enrolled in programme</p>
+            </div>
+            <div className="text-[10px] text-zinc-300 font-semibold bg-white/5 px-2 py-0.5 rounded-md inline-block w-fit">
+              100% verified accounts
+            </div>
+          </div>
+
+          {/* 2. Started Learning */}
+          <div className="bg-[#16161c] border border-[#D4F636]/20 rounded-2xl p-4 flex flex-col justify-between hover:border-[#D4F636]/40 transition-all">
+            <div className="flex items-center justify-between text-[#D4F636] text-xs font-bold">
+              <span>Started Learning</span>
+              <BookOpen className="w-4 h-4 text-[#D4F636]" />
+            </div>
+            <div className="my-2.5">
+              <div className="text-3xl font-black text-[#D4F636] tracking-tight">
+                {learnerMetrics.startedLearning}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-0.5">Opened ≥ 1 lesson</p>
+            </div>
+            <div className="text-[10px] text-[#D4F636] font-semibold bg-[#D4F636]/10 px-2 py-0.5 rounded-md inline-block w-fit">
+              {learnerMetrics.enrolledLearners > 0
+                ? `${Math.round((learnerMetrics.startedLearning / learnerMetrics.enrolledLearners) * 100)}% of learners`
+                : "0% of learners"}
+            </div>
+          </div>
+
+          {/* 3. Not Started */}
+          <div className="bg-[#16161c] border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:border-white/20 transition-all">
+            <div className="flex items-center justify-between text-zinc-400 text-xs font-bold">
+              <span>Not Started</span>
+              <Clock className="w-4 h-4 text-zinc-400" />
+            </div>
+            <div className="my-2.5">
+              <div className="text-3xl font-black text-zinc-300 tracking-tight">
+                {learnerMetrics.notStarted}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-0.5">0 lessons opened</p>
+            </div>
+            <div className="text-[10px] text-zinc-400 font-semibold bg-white/5 px-2 py-0.5 rounded-md inline-block w-fit">
+              Awaiting first view
+            </div>
+          </div>
+
+          {/* 4. In Progress */}
+          <div className="bg-[#16161c] border border-amber-500/20 rounded-2xl p-4 flex flex-col justify-between hover:border-amber-500/40 transition-all">
+            <div className="flex items-center justify-between text-amber-400 text-xs font-bold">
+              <span>In Progress</span>
+              <Flame className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="my-2.5">
+              <div className="text-3xl font-black text-amber-300 tracking-tight">
+                {learnerMetrics.inProgress}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-0.5">Active but &lt; 100%</p>
+            </div>
+            <div className="text-[10px] text-amber-300 font-semibold bg-amber-400/10 px-2 py-0.5 rounded-md inline-block w-fit">
+              Lessons underway
+            </div>
+          </div>
+
+          {/* 5. Completed */}
+          <div className="bg-[#16161c] border border-emerald-500/20 rounded-2xl p-4 flex flex-col justify-between col-span-2 sm:col-span-1 hover:border-emerald-500/40 transition-all">
+            <div className="flex items-center justify-between text-emerald-400 text-xs font-bold">
+              <span>Completed</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="my-2.5">
+              <div className="text-3xl font-black text-emerald-400 tracking-tight">
+                {learnerMetrics.completed}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-0.5">All {currentPathwayInfo.totalLessons} lessons done</p>
+            </div>
+            <div className="text-[10px] text-emerald-300 font-semibold bg-emerald-400/10 px-2 py-0.5 rounded-md inline-block w-fit">
+              {learnerMetrics.enrolledLearners > 0
+                ? `${Math.round((learnerMetrics.completed / learnerMetrics.enrolledLearners) * 100)}% pathway completion`
+                : "0% completed"}
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Controls & Search */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 pb-4">
+          {/* Status Filters */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              type="button"
+              onClick={() => setActivityStatusFilter("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activityStatusFilter === "all"
+                  ? "bg-[#D4F636] text-black shadow-xs font-black"
+                  : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              All Learners ({learnerActivityList.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivityStatusFilter("started")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activityStatusFilter === "started"
+                  ? "bg-[#D4F636] text-black shadow-xs font-black"
+                  : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              Started ({learnerMetrics.startedLearning})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivityStatusFilter("not_started")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activityStatusFilter === "not_started"
+                  ? "bg-[#D4F636] text-black shadow-xs font-black"
+                  : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              Not Started ({learnerMetrics.notStarted})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivityStatusFilter("in_progress")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activityStatusFilter === "in_progress"
+                  ? "bg-[#D4F636] text-black shadow-xs font-black"
+                  : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              In Progress ({learnerMetrics.inProgress})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivityStatusFilter("completed")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activityStatusFilter === "completed"
+                  ? "bg-[#D4F636] text-black shadow-xs font-black"
+                  : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              Completed ({learnerMetrics.completed})
+            </button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative shrink-0 sm:w-64">
+            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search learner name or email..."
+              value={activitySearchTerm}
+              onChange={(e) => setActivitySearchTerm(e.target.value)}
+              className="w-full bg-[#121216] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D4F636] transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Learner Activity Table */}
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#121216]">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/[0.02] text-zinc-400 uppercase text-[10px] font-black tracking-wider">
+                <th className="py-3 px-4">Learner</th>
+                <th className="py-3 px-4 text-center">Completed</th>
+                <th className="py-3 px-4">Progress</th>
+                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-right">Last Active</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filteredLearnerActivity.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-zinc-500">
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <BookOpen className="w-7 h-7 text-zinc-600 mb-1" />
+                      <span className="font-bold text-zinc-300">No learner records found</span>
+                      <span className="text-[11px] text-zinc-500">
+                        {activitySearchTerm ? "No learners match your search query." : "No learners in this status filter yet."}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredLearnerActivity.map((learner) => (
+                  <tr key={learner.id} className="hover:bg-white/[0.03] transition-colors">
+                    {/* Learner */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-950 border border-white/10 flex items-center justify-center text-xs font-black text-[#D4F636] shrink-0">
+                          {learner.name ? learner.name.charAt(0).toUpperCase() : learner.email.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="truncate max-w-[220px]">
+                          <div className="font-bold text-white truncate flex items-center gap-1.5">
+                            <span>{learner.name}</span>
+                            {learner.role === "admin" && (
+                              <span className="bg-[#D4F636]/20 text-[#D4F636] text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-[#D4F636]/30">
+                                ADMIN
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-zinc-400 font-mono truncate">
+                            {learner.email}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Completed */}
+                    <td className="py-3.5 px-4 text-center font-mono font-bold">
+                      <span className="text-white text-sm">{learner.completedCount}</span>
+                      <span className="text-zinc-500 text-xs"> / {learner.totalLessons}</span>
+                    </td>
+
+                    {/* Progress */}
+                    <td className="py-3.5 px-4 min-w-[140px]">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold">
+                          <span className="text-zinc-200">{learner.progressPercent}%</span>
+                          <span className="text-zinc-500 text-[10px]">
+                            {learner.completedCount === learner.totalLessons ? "Done" : `${learner.totalLessons - learner.completedCount} left`}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              learner.progressPercent === 100
+                                ? "bg-emerald-400"
+                                : learner.progressPercent > 0
+                                ? "bg-[#D4F636]"
+                                : "bg-transparent"
+                            }`}
+                            style={{ width: `${learner.progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3.5 px-4 text-center">
+                      {learner.status === "Completed" ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Completed
+                        </span>
+                      ) : learner.status === "In Progress" ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#D4F636] bg-[#D4F636]/15 border border-[#D4F636]/30 px-2.5 py-0.5 rounded-full">
+                          <Flame className="w-3 h-3" />
+                          In Progress
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-400 bg-zinc-800/80 border border-zinc-700 px-2.5 py-0.5 rounded-full">
+                          <Clock className="w-3 h-3" />
+                          Not Started
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Last Active */}
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="text-xs font-semibold text-zinc-200">
+                        {formatLastActive(learner.lastActiveAt)}
+                      </div>
+                      {learner.startedAt && (
+                        <div className="text-[10px] text-zinc-500 font-mono">
+                          Started: {formatLastActive(learner.startedAt)}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
   };
 
   const todayDateFormatted = new Date().toLocaleDateString("en-US", {
@@ -836,6 +1358,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
 
               <button
                 type="button"
+                onClick={() => setActiveTab("activity")}
+                className={`p-3 rounded-2xl transition-all cursor-pointer relative ${
+                  activeTab === "activity"
+                    ? "bg-[#D4F636] text-black shadow-lg shadow-[#D4F636]/20 font-bold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                }`}
+                title="14-Day Mini-Launch Learner Activity Tracking"
+              >
+                <GraduationCap className="w-5 h-5" />
+                {learnerMetrics.startedLearning > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#D4F636] text-black font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+                    {learnerMetrics.startedLearning}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab("settings")}
                 className={`p-3 rounded-2xl transition-all cursor-pointer relative ${
                   activeTab === "settings"
@@ -1065,6 +1605,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                   </div>
                 </div>
               </div>
+
+              {/* 14-Day Mini-Launch Learner Activity Tracking & Metrics Overview */}
+              {renderLearnerActivitySection(false)}
 
               {/* Overview Quick Sync Callout Bar */}
               <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-black text-white p-4 sm:p-5 rounded-2xl border border-[#D4F636]/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
@@ -1769,6 +2312,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 4.5: LEARNER ACTIVITY TRACKING (14-DAY MINI-LAUNCH) */}
+          {activeTab === "activity" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {renderLearnerActivitySection(true)}
             </div>
           )}
 

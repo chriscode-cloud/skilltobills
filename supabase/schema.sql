@@ -183,33 +183,51 @@ create policy "Admins can manage lessons"
   using (public.is_admin() or auth.role() = 'service_role')
   with check (public.is_admin() or auth.role() = 'service_role');
 
--- 5. User Progress Table
+-- 5. User Progress Table (Tracks lesson opening, active learning, and completion)
 create table if not exists public.user_progress (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   lesson_id text references public.lessons(id) on delete cascade not null,
-  completed_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  completed_at timestamp with time zone,
+  started_at timestamp with time zone default timezone('utc'::text, now()),
+  last_active_at timestamp with time zone default timezone('utc'::text, now()),
+  is_completed boolean default false,
+  course_slug text default 'ai-virtual-influencers',
   unique (user_id, lesson_id)
 );
 
+-- Idempotent column migrations for existing user_progress tables
+alter table public.user_progress alter column completed_at drop not null;
+alter table public.user_progress add column if not exists started_at timestamp with time zone default timezone('utc'::text, now());
+alter table public.user_progress add column if not exists last_active_at timestamp with time zone default timezone('utc'::text, now());
+alter table public.user_progress add column if not exists is_completed boolean default false;
+alter table public.user_progress add column if not exists course_slug text default 'ai-virtual-influencers';
+
 create index if not exists user_progress_user_id_idx on public.user_progress(user_id);
 create index if not exists user_progress_lesson_id_idx on public.user_progress(lesson_id);
+create index if not exists user_progress_course_slug_idx on public.user_progress(course_slug);
 alter table public.user_progress enable row level security;
 
 drop policy if exists "Users can view own progress" on public.user_progress;
 create policy "Users can view own progress"
   on public.user_progress for select
-  using (auth.uid() = user_id or public.is_admin());
+  using (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
 
 drop policy if exists "Users can insert own progress" on public.user_progress;
 create policy "Users can insert own progress"
   on public.user_progress for insert
-  with check (auth.uid() = user_id);
+  with check (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
+
+drop policy if exists "Users can update own progress" on public.user_progress;
+create policy "Users can update own progress"
+  on public.user_progress for update
+  using (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role')
+  with check (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
 
 drop policy if exists "Users can delete own progress" on public.user_progress;
 create policy "Users can delete own progress"
   on public.user_progress for delete
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
 
 -- 6. Enrollments Table
 create table if not exists public.enrollments (

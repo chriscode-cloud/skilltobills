@@ -27,6 +27,11 @@ import { usePageMeta } from "../../hooks/usePageMeta";
 import { findCourseBySlugOrId, getSafeEmbedUrl } from "./courseUtils";
 import { LearnerFeedbackPopup } from "../feedback/LearnerFeedbackPopup";
 import { StructuredLessonContent } from "./StructuredLessonContent";
+import {
+  recordLessonOpen,
+  recordLessonComplete,
+  recordLessonIncomplete,
+} from "../../lib/superbase/courses";
 
 // Single toggle for sequential progression locking (set false for open curriculum)
 const ENFORCE_SEQUENTIAL_UNLOCKING = false;
@@ -109,13 +114,18 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
       });
   }, [currentUser]);
 
-  // Reset quiz when lesson changes
+  // Track activity when lesson opens and reset quiz
   useEffect(() => {
     setQuizAnswer(null);
     setQuizSubmitted(false);
     setEmbedError(false);
     window.scrollTo({ top: 0, behavior: "instant" });
-  }, [currentLesson.id]);
+
+    // Record lesson open / start activity without resetting completion status
+    if (currentLesson?.id) {
+      recordLessonOpen(currentLesson.id, course.slug, currentUser).catch(() => {});
+    }
+  }, [currentLesson.id, course.slug, currentUser]);
 
   const isCompleted = completedLessonIds.includes(currentLesson.id);
 
@@ -124,8 +134,10 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
     let nextCompleted: string[];
     if (isCompleted) {
       nextCompleted = completedLessonIds.filter((id) => id !== currentLesson.id);
+      await recordLessonIncomplete(currentLesson.id, course.slug, currentUser).catch(() => {});
     } else {
       nextCompleted = [...completedLessonIds, currentLesson.id];
+      await recordLessonComplete(currentLesson.id, course.slug, currentUser).catch(() => {});
 
       // If user reaches 2 or more completed lessons, automatically pop up the Typeform feedback modal!
       const nextTrackCount = allLessonsWithModule.filter((l) => nextCompleted.includes(l.id)).length;
@@ -145,25 +157,6 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
       "skill2bills_lms_progress_v2",
       JSON.stringify({ completedLessonIds: nextCompleted, lastActiveLessonId: currentLesson.id })
     );
-
-    if (currentUser && isSupabaseConfigured && supabase) {
-      try {
-        if (!isCompleted) {
-          await supabase.from("user_progress").upsert({
-            user_id: currentUser.id,
-            lesson_id: currentLesson.id,
-            completed_at: new Date().toISOString(),
-          });
-        } else {
-          await supabase
-            .from("user_progress")
-            .delete()
-            .match({ user_id: currentUser.id, lesson_id: currentLesson.id });
-        }
-      } catch {
-        // offline
-      }
-    }
   };
 
   const isLessonLocked = (idx: number) => {
