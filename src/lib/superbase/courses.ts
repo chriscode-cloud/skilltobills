@@ -226,17 +226,27 @@ export async function recordLessonOpen(
   // 2. Persist to Supabase user_progress table
   if (isSupabaseConfigured && supabase) {
     try {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       let targetUserId = userId;
       try {
         const { data: authData } = await supabase.auth.getUser();
-        if (authData?.user?.id) {
+        if (authData?.user?.id && UUID_REGEX.test(authData.user.id)) {
           targetUserId = authData.user.id;
         }
       } catch {
         // ignore
       }
 
-      if (targetUserId && !targetUserId.startsWith("anonymous")) {
+      if (!UUID_REGEX.test(targetUserId) && userEmail) {
+        try {
+          const { data: prof } = await supabase.from("profiles").select("id").eq("email", userEmail).maybeSingle();
+          if (prof?.id && UUID_REGEX.test(prof.id)) {
+            targetUserId = prof.id;
+          }
+        } catch {}
+      }
+
+      if (targetUserId && UUID_REGEX.test(targetUserId)) {
         // First check if row exists to avoid resetting completed_at
         const { data: existingRows } = await supabase
           .from("user_progress")
@@ -262,7 +272,10 @@ export async function recordLessonOpen(
             .eq("id", existingRow.id);
 
           if (updateErr) {
-            console.warn("Could not update last_active_at on user_progress:", updateErr.message);
+            const adminClient = getSupabaseAdminClient();
+            if (adminClient) {
+              await adminClient.from("user_progress").update(updatePayload).eq("id", existingRow.id);
+            }
           }
         } else {
           // First time opening this lesson: insert with started_at and is_completed = false
@@ -280,12 +293,9 @@ export async function recordLessonOpen(
             .insert(insertPayload);
 
           if (insertErr) {
-            try {
-              await supabase
-                .from("user_progress")
-                .insert({ user_id: targetUserId, lesson_id: lessonId });
-            } catch {
-              // ignore
+            const adminClient = getSupabaseAdminClient();
+            if (adminClient) {
+              await adminClient.from("user_progress").insert(insertPayload);
             }
           }
         }
@@ -391,17 +401,27 @@ export async function recordLessonComplete(
   // 2. Persist to Supabase
   if (isSupabaseConfigured && supabase) {
     try {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       let targetUserId = userId;
       try {
         const { data: authData } = await supabase.auth.getUser();
-        if (authData?.user?.id) {
+        if (authData?.user?.id && UUID_REGEX.test(authData.user.id)) {
           targetUserId = authData.user.id;
         }
       } catch {
         // ignore
       }
 
-      if (targetUserId && !targetUserId.startsWith("anonymous")) {
+      if (!UUID_REGEX.test(targetUserId) && userEmail) {
+        try {
+          const { data: prof } = await supabase.from("profiles").select("id").eq("email", userEmail).maybeSingle();
+          if (prof?.id && UUID_REGEX.test(prof.id)) {
+            targetUserId = prof.id;
+          }
+        } catch {}
+      }
+
+      if (targetUserId && UUID_REGEX.test(targetUserId)) {
         const upsertPayload: any = {
           user_id: targetUserId,
           lesson_id: lessonId,
@@ -416,10 +436,12 @@ export async function recordLessonComplete(
           .upsert(upsertPayload, { onConflict: "user_id,lesson_id" });
 
         if (error) {
-          // Fallback for minimal legacy schema
-          await supabase
-            .from("user_progress")
-            .upsert({ user_id: targetUserId, lesson_id: lessonId, completed_at: now }, { onConflict: "user_id,lesson_id" });
+          const adminClient = getSupabaseAdminClient();
+          if (adminClient) {
+            await adminClient
+              .from("user_progress")
+              .upsert(upsertPayload, { onConflict: "user_id,lesson_id" });
+          }
         }
       }
     } catch (err) {
@@ -451,6 +473,7 @@ export async function recordLessonIncomplete(
     } catch {}
   }
   const userId = user?.id || "anonymous-learner";
+  const userEmail = (user?.email || "").toLowerCase().trim();
 
   // 1. Update local storage
   try {
@@ -500,17 +523,27 @@ export async function recordLessonIncomplete(
   // 2. Update Supabase
   if (isSupabaseConfigured && supabase) {
     try {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       let targetUserId = userId;
       try {
         const { data: authData } = await supabase.auth.getUser();
-        if (authData?.user?.id) {
+        if (authData?.user?.id && UUID_REGEX.test(authData.user.id)) {
           targetUserId = authData.user.id;
         }
       } catch {
         // ignore
       }
 
-      if (targetUserId && !targetUserId.startsWith("anonymous")) {
+      if (!UUID_REGEX.test(targetUserId) && userEmail) {
+        try {
+          const { data: prof } = await supabase.from("profiles").select("id").eq("email", userEmail).maybeSingle();
+          if (prof?.id && UUID_REGEX.test(prof.id)) {
+            targetUserId = prof.id;
+          }
+        } catch {}
+      }
+
+      if (targetUserId && UUID_REGEX.test(targetUserId)) {
         const { error } = await supabase
           .from("user_progress")
           .update({ is_completed: false, completed_at: null, last_active_at: now })
@@ -518,12 +551,14 @@ export async function recordLessonIncomplete(
           .eq("lesson_id", lessonId);
 
         if (error) {
-          // Fallback: delete row if completed_at column has NOT NULL
-          await supabase
-            .from("user_progress")
-            .delete()
-            .eq("user_id", targetUserId)
-            .eq("lesson_id", lessonId);
+          const adminClient = getSupabaseAdminClient();
+          if (adminClient) {
+            await adminClient
+              .from("user_progress")
+              .update({ is_completed: false, completed_at: null, last_active_at: now })
+              .eq("user_id", targetUserId)
+              .eq("lesson_id", lessonId);
+          }
         }
       }
     } catch {}

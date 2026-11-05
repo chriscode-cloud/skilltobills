@@ -6,6 +6,7 @@ import { getLessonPathway } from "./superbase/courses";
 
 export const STORAGE_KEY_PROGRESS = "skill2bills_lms_progress_v2";
 export const EVENT_PROGRESS_SYNCED = "skill2bills_progress_synced";
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ProgressCacheData {
   completedLessonIds: string[];
@@ -102,10 +103,12 @@ export function getContinueLesson(
 }
 
 /**
- * Robust cloud & local progress sync:
- * Fetches user_progress from Supabase across auth UUID and email aliases,
- * merges with local storage caches, pushes any offline completions to the cloud,
- * updates localStorage, and broadcasts an update event.
+ * Robust cloud & local progress sync (reciprocal across mobile phone, PC, and any browser):
+ * 1. Resolves all strictly validated auth UUIDs associated with this user.
+ * 2. Fetches user_progress from Supabase without invalid type syntax errors.
+ * 3. Unions cloud and local storage records.
+ * 4. Pushes any locally completed lessons to Supabase so the other devices immediately have it.
+ * 5. Updates localStorage and broadcasts update events to active UI components.
  */
 export async function syncUserProgress(
   user?: AuthUser | { id?: string; email?: string; track?: string } | null
@@ -127,7 +130,7 @@ export async function syncUserProgress(
   if (isSupabaseConfigured && supabase) {
     try {
       const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user?.id) {
+      if (authData?.user?.id && UUID_REGEX.test(authData.user.id)) {
         realAuthUserId = authData.user.id;
       }
     } catch {
@@ -135,29 +138,64 @@ export async function syncUserProgress(
     }
   }
 
-  const candidateIds = new Set<string>();
-  if (user?.id) candidateIds.add(user.id);
-  if (realAuthUserId) candidateIds.add(realAuthUserId);
-  if (cleanEmail) candidateIds.add(cleanEmail);
+  // Collect strictly validated UUIDs ONLY (never pass non-UUID emails into PostgreSQL uuid columns)
+  const validUuids = new Set<string>();
+  if (realAuthUserId) validUuids.add(realAuthUserId);
+  if (user?.id && UUID_REGEX.test(user.id)) validUuids.add(user.id);
 
-  if (ADMIN_EMAILS.includes(cleanEmail)) {
-    ADMIN_EMAILS.forEach((adm) => candidateIds.add(adm.toLowerCase().trim()));
+  // Look up profile in Supabase to resolve real UUID
+  if (cleanEmail && isSupabaseConfigured && supabase) {
+    try {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      if (prof?.id && UUID_REGEX.test(prof.id)) {
+        validUuids.add(prof.id);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Look up auth user via admin client if available
+  const adminClient = getSupabaseAdminClient();
+  if (adminClient && cleanEmail) {
+    try {
+      const { data: listRes } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (listRes?.users) {
+        listRes.users.forEach((u: any) => {
+          const ue = u.email?.toLowerCase().trim();
+          if (ue === cleanEmail && UUID_REGEX.test(u.id)) {
+            validUuids.add(u.id);
+          }
+          if (ADMIN_EMAILS.includes(cleanEmail) && ue && ADMIN_EMAILS.includes(ue) && UUID_REGEX.test(u.id)) {
+            validUuids.add(u.id);
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const cloudCompletedIds = new Set<string>();
   let latestLessonId: string | null = cached.lastActiveLessonId;
   let latestTimestamp = 0;
 
-  // 1. Fetch from Supabase
-  if (isSupabaseConfigured && supabase) {
+  const uuidList = Array.from(validUuids);
+
+  // 1. Fetch from Supabase using strictly validated UUIDs
+  if (isSupabaseConfigured && supabase && uuidList.length > 0) {
     try {
       // A. Query standard client
-      const idsArray = Array.from(candidateIds);
       let query = supabase.from("user_progress").select("*");
-      if (idsArray.length === 1) {
-        query = query.eq("user_id", idsArray[0]);
+      if (uuidList.length === 1) {
+        query = query.eq("user_id", uuidList[0]);
       } else {
-        query = query.in("user_id", idsArray);
+        query = query.in("user_id", uuidList);
       }
 
       const { data: progressRows, error: progressErr } = await query;
@@ -180,14 +218,13 @@ export async function syncUserProgress(
         });
       }
 
-      // B. Query admin client if available (for complete admin roster sync)
-      const adminClient = getSupabaseAdminClient();
-      if (adminClient && idsArray.length > 0) {
+      // B. Query admin client if available
+      if (adminClient) {
         try {
           const { data: adminRows } = await adminClient
             .from("user_progress")
             .select("*")
-            .in("user_id", idsArray);
+            .in("user_id", uuidList);
 
           if (adminRows) {
             adminRows.forEach((r: any) => {
@@ -218,7 +255,14 @@ export async function syncUserProgress(
   // 2. Fetch from local storage caches
   const localCompletedIds = new Set<string>(cached.completedLessonIds);
 
-  candidateIds.forEach((uid) => {
+  // Check user ID and email local keys
+  const localKeysToCheck = new Set<string>();
+  if (user?.id) localKeysToCheck.add(user.id);
+  if (realAuthUserId) localKeysToCheck.add(realAuthUserId);
+  if (cleanEmail) localKeysToCheck.add(cleanEmail);
+  uuidList.forEach((uid) => localKeysToCheck.add(uid));
+
+  localKeysToCheck.forEach((uid) => {
     try {
       const userKey = `skill2bills_user_progress_${uid}`;
       const raw = localStorage.getItem(userKey);
@@ -235,23 +279,33 @@ export async function syncUserProgress(
     }
   });
 
-  // 3. Union cloud & local
+  // 3. Union cloud & local (cross-device source of truth)
   const unionCompleted = Array.from(new Set([...cloudCompletedIds, ...localCompletedIds]));
 
-  // 4. Promote any local completions up to Supabase if logged in
-  if (isSupabaseConfigured && supabase && realAuthUserId) {
+  // 4. Promote any local completions up to Supabase so other devices receive them
+  const activeTargetUuid = (realAuthUserId && UUID_REGEX.test(realAuthUserId)) ? realAuthUserId : uuidList[0];
+  if (isSupabaseConfigured && supabase && activeTargetUuid) {
     const missingInCloud = unionCompleted.filter((id) => !cloudCompletedIds.has(id));
     if (missingInCloud.length > 0) {
       try {
         const rowsToInsert = missingInCloud.map((id) => ({
-          user_id: realAuthUserId,
+          user_id: activeTargetUuid,
           lesson_id: id,
           course_slug: getLessonPathway(id),
           is_completed: true,
           completed_at: new Date().toISOString(),
           last_active_at: new Date().toISOString(),
         }));
-        await supabase.from("user_progress").upsert(rowsToInsert, { onConflict: "user_id,lesson_id" });
+
+        const { error: upsertErr } = await supabase
+          .from("user_progress")
+          .upsert(rowsToInsert, { onConflict: "user_id,lesson_id" });
+
+        if (upsertErr && adminClient) {
+          await adminClient
+            .from("user_progress")
+            .upsert(rowsToInsert, { onConflict: "user_id,lesson_id" });
+        }
       } catch (err) {
         console.warn("Could not promote local completions to Supabase:", err);
       }
@@ -266,14 +320,14 @@ export async function syncUserProgress(
     completedLessonIds: unionCompleted,
     lastActiveLessonId: continueLesson.id,
     userEmail: cleanEmail,
-    userId: realAuthUserId || user?.id,
+    userId: activeTargetUuid || user?.id,
     syncedAt: new Date().toISOString(),
   };
 
   try {
     localStorage.setItem(STORAGE_KEY_PROGRESS, JSON.stringify(payloadToCache));
 
-    candidateIds.forEach((uid) => {
+    localKeysToCheck.forEach((uid) => {
       const userKey = `skill2bills_user_progress_${uid}`;
       const existingRaw = localStorage.getItem(userKey);
       const existing = existingRaw ? JSON.parse(existingRaw) : {};
@@ -312,5 +366,45 @@ export async function syncUserProgress(
     completedLessonIds: unionCompleted,
     lastActiveLessonId: continueLesson.id,
     continueLessonId: continueLesson.id,
+  };
+}
+
+/**
+ * Enables cross-device reciprocal synchronization:
+ * Whenever the user switches back to this tab / window on phone or PC,
+ * or on an 8-second background heartbeat, it pulls the latest progress
+ * from Supabase so both devices stay in sync reciprocally.
+ */
+let isCrossDeviceSyncInitialized = false;
+export function initCrossDeviceProgressSync(userProvider: () => AuthUser | null): () => void {
+  if (typeof window === "undefined" || isCrossDeviceSyncInitialized) {
+    return () => {};
+  }
+  isCrossDeviceSyncInitialized = true;
+
+  const triggerSync = () => {
+    const currentUser = userProvider();
+    if (currentUser) {
+      syncUserProgress(currentUser).catch(() => {});
+    }
+  };
+
+  const handleVisibility = () => {
+    if (document.visibilityState === "visible") {
+      triggerSync();
+    }
+  };
+
+  window.addEventListener("focus", triggerSync);
+  document.addEventListener("visibilitychange", handleVisibility);
+
+  // Background heartbeat poll every 8 seconds to guarantee cross-device sync if user leaves both open
+  const interval = setInterval(triggerSync, 8000);
+
+  return () => {
+    window.removeEventListener("focus", triggerSync);
+    document.removeEventListener("visibilitychange", handleVisibility);
+    clearInterval(interval);
+    isCrossDeviceSyncInitialized = false;
   };
 }

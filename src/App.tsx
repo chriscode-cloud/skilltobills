@@ -37,7 +37,7 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { AdminGuard } from "./components/admin/AdminGuard";
 import { COURSE_TRACKS, CourseTrack, BLOG_ARTICLES } from "./data/contentData";
 import { getStoredUser, clearStoredUser, setStoredUser, AuthUser, ADMIN_EMAILS, isUserAdmin } from "./lib/auth";
-import { syncUserProgress } from "./lib/progressSync";
+import { syncUserProgress, initCrossDeviceProgressSync } from "./lib/progressSync";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { usePageMeta } from "./hooks/usePageMeta";
 
@@ -419,7 +419,7 @@ export default function App() {
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+          if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") && session?.user) {
             // Fetch live profile to check onboarding completion & track
             const { data: profile } = await supabase
               .from("profiles")
@@ -527,6 +527,12 @@ export default function App() {
       syncUserProgress(currentUser).catch(() => {});
     }
   }, [currentUser?.id, currentUser?.email]);
+
+  // Reciprocal cross-device listener (re-syncs on phone unlock / tab focus / visibility)
+  useEffect(() => {
+    const cleanup = initCrossDeviceProgressSync(() => getStoredUser());
+    return () => cleanup();
+  }, []);
 
   const handleLogout = async () => {
     if (isSupabaseConfigured && supabase) {
