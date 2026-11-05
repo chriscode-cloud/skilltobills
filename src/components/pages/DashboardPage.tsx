@@ -7,6 +7,8 @@ import { findCourseBySlugOrId } from "../lms/courseUtils";
 import { supabase, isSupabaseConfigured } from "../../lib/supabase";
 import { usePageMeta } from "../../hooks/usePageMeta";
 
+import { getUserProgressCache, syncUserProgress, getContinueLesson, EVENT_PROGRESS_SYNCED } from "../../lib/progressSync";
+
 interface DashboardPageProps {
   currentUser: AuthUser;
 }
@@ -15,40 +17,50 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => 
   usePageMeta("Student Dashboard", "Track your curriculum progress and continue learning.");
 
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("skill2bills_lms_progress_v2");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.completedLessonIds || [];
-      }
-    } catch {
-      // ignore
-    }
-    return [];
+    return getUserProgressCache().completedLessonIds;
+  });
+  const [lastActiveLessonId, setLastActiveLessonId] = useState<string | null>(() => {
+    return getUserProgressCache().lastActiveLessonId || null;
   });
 
-  // Load real progress from Supabase on mount
+  // Load and sync real progress from Supabase on mount and live events
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
+    let isMounted = true;
 
-    const loadProgress = async () => {
-      try {
-        const { data } = await supabase
-          .from("user_progress")
-          .select("lesson_id")
-          .eq("user_id", currentUser.id);
+    syncUserProgress(currentUser).then((res) => {
+      if (isMounted) {
+        setCompletedLessonIds(res.completedLessonIds);
+        setLastActiveLessonId(res.lastActiveLessonId || null);
+      }
+    });
 
-        if (data && data.length > 0) {
-          const ids = data.map((d: any) => d.lesson_id);
-          setCompletedLessonIds((prev) => Array.from(new Set([...prev, ...ids])));
-        }
-      } catch {
-        // ignore
+    const handleProgressSynced = (e: any) => {
+      if (e.detail?.completedLessonIds) {
+        setCompletedLessonIds(e.detail.completedLessonIds);
+      }
+      if (e.detail?.lastActiveLessonId) {
+        setLastActiveLessonId(e.detail.lastActiveLessonId);
       }
     };
 
-    loadProgress();
-  }, [currentUser.id]);
+    const handleActivityUpdated = () => {
+      syncUserProgress(currentUser).then((res) => {
+        if (isMounted) {
+          setCompletedLessonIds(res.completedLessonIds);
+          setLastActiveLessonId(res.lastActiveLessonId || null);
+        }
+      });
+    };
+
+    window.addEventListener(EVENT_PROGRESS_SYNCED, handleProgressSynced);
+    window.addEventListener("skill2bills_activity_updated", handleActivityUpdated);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener(EVENT_PROGRESS_SYNCED, handleProgressSynced);
+      window.removeEventListener("skill2bills_activity_updated", handleActivityUpdated);
+    };
+  }, [currentUser]);
 
   // Determine user's active course
   const primaryCourse: Course = findCourseBySlugOrId(currentUser.track);
@@ -62,8 +74,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => 
     ? Math.round((completedInPrimary.length / allLessons.length) * 100)
     : 0;
 
-  // Next lesson to continue
-  const nextLesson = allLessons.find((l) => !completedLessonIds.includes(l.id)) || allLessons[0];
+  // Next lesson to continue (exact next sequential incomplete lesson or last active)
+  const nextLesson = getContinueLesson(primaryCourse.slug, completedLessonIds, lastActiveLessonId);
   const firstName = currentUser.name ? currentUser.name.split(" ")[0] : "Christian";
 
   return (

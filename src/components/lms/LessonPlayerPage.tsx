@@ -32,6 +32,7 @@ import {
   recordLessonComplete,
   recordLessonIncomplete,
 } from "../../lib/superbase/courses";
+import { getUserProgressCache, syncUserProgress, EVENT_PROGRESS_SYNCED } from "../../lib/progressSync";
 
 // Single toggle for sequential progression locking (set false for open curriculum)
 const ENFORCE_SEQUENTIAL_UNLOCKING = false;
@@ -46,13 +47,7 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
 
   // Progress state
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("skill2bills_lms_progress_v2");
-      if (saved) return JSON.parse(saved).completedLessonIds || [];
-    } catch {
-      // ignore
-    }
-    return [];
+    return getUserProgressCache().completedLessonIds;
   });
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -99,19 +94,26 @@ export const LessonPlayerPage: React.FC<LessonPlayerPageProps> = ({ currentUser 
 
 
 
-  // Sync with Supabase if logged in
+  // Sync with Supabase on mount and listen for global progress updates
   useEffect(() => {
-    if (!currentUser || !isSupabaseConfigured || !supabase) return;
-    supabase
-      .from("user_progress")
-      .select("lesson_id")
-      .eq("user_id", currentUser.id)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          const ids = data.map((d: any) => d.lesson_id);
-          setCompletedLessonIds((prev) => Array.from(new Set([...prev, ...ids])));
-        }
-      });
+    let isMounted = true;
+    syncUserProgress(currentUser).then((res) => {
+      if (isMounted && res.completedLessonIds) {
+        setCompletedLessonIds(res.completedLessonIds);
+      }
+    });
+
+    const handleSynced = (e: any) => {
+      if (e.detail?.completedLessonIds) {
+        setCompletedLessonIds(e.detail.completedLessonIds);
+      }
+    };
+
+    window.addEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    };
   }, [currentUser]);
 
   // Track activity when lesson opens and reset quiz

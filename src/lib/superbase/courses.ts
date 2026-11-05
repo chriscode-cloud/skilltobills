@@ -224,57 +224,69 @@ export async function recordLessonOpen(
   }
 
   // 2. Persist to Supabase user_progress table
-  if (isSupabaseConfigured && supabase && userId && !userId.startsWith("anonymous")) {
+  if (isSupabaseConfigured && supabase) {
     try {
-      // First check if row exists to avoid resetting completed_at
-      const { data: existingRows } = await supabase
-        .from("user_progress")
-        .select("id, completed_at, started_at, is_completed")
-        .eq("user_id", userId)
-        .eq("lesson_id", lessonId)
-        .limit(1);
-
-      const existingRow = existingRows?.[0];
-
-      if (existingRow) {
-        // Reopening an existing lesson: update last_active_at without touching completed_at
-        const updatePayload: any = {
-          last_active_at: now,
-        };
-        if (!existingRow.started_at) {
-          updatePayload.started_at = now;
+      let targetUserId = userId;
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id) {
+          targetUserId = authData.user.id;
         }
+      } catch {
+        // ignore
+      }
 
-        const { error: updateErr } = await supabase
+      if (targetUserId && !targetUserId.startsWith("anonymous")) {
+        // First check if row exists to avoid resetting completed_at
+        const { data: existingRows } = await supabase
           .from("user_progress")
-          .update(updatePayload)
-          .eq("id", existingRow.id);
+          .select("id, completed_at, started_at, is_completed")
+          .eq("user_id", targetUserId)
+          .eq("lesson_id", lessonId)
+          .limit(1);
 
-        if (updateErr) {
-          console.warn("Could not update last_active_at on user_progress:", updateErr.message);
-        }
-      } else {
-        // First time opening this lesson: insert with started_at and is_completed = false
-        const insertPayload: any = {
-          user_id: userId,
-          lesson_id: lessonId,
-          started_at: now,
-          last_active_at: now,
-          is_completed: false,
-          course_slug: courseSlug,
-        };
+        const existingRow = existingRows?.[0];
 
-        const { error: insertErr } = await supabase
-          .from("user_progress")
-          .insert(insertPayload);
+        if (existingRow) {
+          // Reopening an existing lesson: update last_active_at without touching completed_at
+          const updatePayload: any = {
+            last_active_at: now,
+          };
+          if (!existingRow.started_at) {
+            updatePayload.started_at = now;
+          }
 
-        if (insertErr) {
-          try {
-            await supabase
-              .from("user_progress")
-              .insert({ user_id: userId, lesson_id: lessonId });
-          } catch {
-            // ignore
+          const { error: updateErr } = await supabase
+            .from("user_progress")
+            .update(updatePayload)
+            .eq("id", existingRow.id);
+
+          if (updateErr) {
+            console.warn("Could not update last_active_at on user_progress:", updateErr.message);
+          }
+        } else {
+          // First time opening this lesson: insert with started_at and is_completed = false
+          const insertPayload: any = {
+            user_id: targetUserId,
+            lesson_id: lessonId,
+            started_at: now,
+            last_active_at: now,
+            is_completed: false,
+            course_slug: courseSlug,
+          };
+
+          const { error: insertErr } = await supabase
+            .from("user_progress")
+            .insert(insertPayload);
+
+          if (insertErr) {
+            try {
+              await supabase
+                .from("user_progress")
+                .insert({ user_id: targetUserId, lesson_id: lessonId });
+            } catch {
+              // ignore
+            }
           }
         }
       }
@@ -356,32 +368,59 @@ export async function recordLessonComplete(
     lmsProgress.lastActiveLessonId = lessonId;
     localStorage.setItem("skill2bills_lms_progress_v2", JSON.stringify(lmsProgress));
 
+    if (userEmail && userEmail !== userId) {
+      try {
+        localStorage.setItem(`skill2bills_user_progress_${userEmail}`, JSON.stringify(existing));
+      } catch {}
+    }
+
     window.dispatchEvent(new CustomEvent("skill2bills_activity_updated", { detail: { userId, lessonId, now } }));
+    window.dispatchEvent(
+      new CustomEvent("skill2bills_progress_synced", {
+        detail: {
+          completedLessonIds: lmsProgress.completedLessonIds,
+          lastActiveLessonId: lessonId,
+          continueLessonId: lessonId,
+        },
+      })
+    );
   } catch {
     // ignore
   }
 
   // 2. Persist to Supabase
-  if (isSupabaseConfigured && supabase && userId && !userId.startsWith("anonymous")) {
+  if (isSupabaseConfigured && supabase) {
     try {
-      const upsertPayload: any = {
-        user_id: userId,
-        lesson_id: lessonId,
-        completed_at: now,
-        last_active_at: now,
-        is_completed: true,
-        course_slug: courseSlug,
-      };
+      let targetUserId = userId;
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id) {
+          targetUserId = authData.user.id;
+        }
+      } catch {
+        // ignore
+      }
 
-      const { error } = await supabase
-        .from("user_progress")
-        .upsert(upsertPayload, { onConflict: "user_id,lesson_id" });
+      if (targetUserId && !targetUserId.startsWith("anonymous")) {
+        const upsertPayload: any = {
+          user_id: targetUserId,
+          lesson_id: lessonId,
+          completed_at: now,
+          last_active_at: now,
+          is_completed: true,
+          course_slug: courseSlug,
+        };
 
-      if (error) {
-        // Fallback for minimal legacy schema
-        await supabase
+        const { error } = await supabase
           .from("user_progress")
-          .upsert({ user_id: userId, lesson_id: lessonId, completed_at: now }, { onConflict: "user_id,lesson_id" });
+          .upsert(upsertPayload, { onConflict: "user_id,lesson_id" });
+
+        if (error) {
+          // Fallback for minimal legacy schema
+          await supabase
+            .from("user_progress")
+            .upsert({ user_id: targetUserId, lesson_id: lessonId, completed_at: now }, { onConflict: "user_id,lesson_id" });
+        }
       }
     } catch (err) {
       console.warn("Supabase recordLessonComplete error:", err);
@@ -437,32 +476,55 @@ export async function recordLessonIncomplete(
       localStorage.setItem("skill2bills_all_learner_progress", JSON.stringify(allActivity));
     }
 
+    let nextCompletedIds: string[] = [];
     const lmsProgressRaw = localStorage.getItem("skill2bills_lms_progress_v2");
     if (lmsProgressRaw) {
       const lmsProgress = JSON.parse(lmsProgressRaw);
       lmsProgress.completedLessonIds = (lmsProgress.completedLessonIds || []).filter((id: string) => id !== lessonId);
+      nextCompletedIds = lmsProgress.completedLessonIds;
       localStorage.setItem("skill2bills_lms_progress_v2", JSON.stringify(lmsProgress));
     }
 
     window.dispatchEvent(new CustomEvent("skill2bills_activity_updated", { detail: { userId, lessonId, now } }));
+    window.dispatchEvent(
+      new CustomEvent("skill2bills_progress_synced", {
+        detail: {
+          completedLessonIds: nextCompletedIds,
+          lastActiveLessonId: lessonId,
+          continueLessonId: lessonId,
+        },
+      })
+    );
   } catch {}
 
   // 2. Update Supabase
-  if (isSupabaseConfigured && supabase && userId && !userId.startsWith("anonymous")) {
+  if (isSupabaseConfigured && supabase) {
     try {
-      const { error } = await supabase
-        .from("user_progress")
-        .update({ is_completed: false, completed_at: null, last_active_at: now })
-        .eq("user_id", userId)
-        .eq("lesson_id", lessonId);
+      let targetUserId = userId;
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id) {
+          targetUserId = authData.user.id;
+        }
+      } catch {
+        // ignore
+      }
 
-      if (error) {
-        // Fallback: delete row if completed_at column has NOT NULL
-        await supabase
+      if (targetUserId && !targetUserId.startsWith("anonymous")) {
+        const { error } = await supabase
           .from("user_progress")
-          .delete()
-          .eq("user_id", userId)
+          .update({ is_completed: false, completed_at: null, last_active_at: now })
+          .eq("user_id", targetUserId)
           .eq("lesson_id", lessonId);
+
+        if (error) {
+          // Fallback: delete row if completed_at column has NOT NULL
+          await supabase
+            .from("user_progress")
+            .delete()
+            .eq("user_id", targetUserId)
+            .eq("lesson_id", lessonId);
+        }
       }
     } catch {}
   }

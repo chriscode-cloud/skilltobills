@@ -37,6 +37,7 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { AdminGuard } from "./components/admin/AdminGuard";
 import { COURSE_TRACKS, CourseTrack, BLOG_ARTICLES } from "./data/contentData";
 import { getStoredUser, clearStoredUser, setStoredUser, AuthUser, ADMIN_EMAILS, isUserAdmin } from "./lib/auth";
+import { syncUserProgress } from "./lib/progressSync";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { usePageMeta } from "./hooks/usePageMeta";
 
@@ -266,6 +267,7 @@ function HashAndSessionManager({
 
                 setStoredUser(authUser);
                 setCurrentUser(authUser);
+                syncUserProgress(authUser).catch(() => {});
                 window.history.replaceState(null, "", window.location.pathname);
                 navigate(isDesignatedAdmin ? "/dashboard" : "/onboarding", { replace: true });
                 return;
@@ -316,6 +318,7 @@ function HashAndSessionManager({
 
             setStoredUser(authUser);
             setCurrentUser(authUser);
+            syncUserProgress(authUser).catch(() => {});
             window.history.replaceState(null, "", window.location.pathname);
             navigate(isDesignatedAdmin ? "/dashboard" : "/onboarding", { replace: true });
             return;
@@ -353,6 +356,7 @@ function HashAndSessionManager({
 
             setStoredUser(authUser);
             setCurrentUser(authUser);
+            syncUserProgress(authUser).catch(() => {});
             window.history.replaceState(null, "", window.location.pathname);
             navigate(isDesignatedAdmin ? "/dashboard" : "/onboarding", { replace: true });
             return;
@@ -482,6 +486,7 @@ export default function App() {
 
             setStoredUser(authUser);
             setCurrentUser(authUser);
+            syncUserProgress(authUser).catch(() => {});
 
             // Clean hash or query parameters if returning from OAuth / magic link redirect
             if (window.location.hash.includes("access_token") || window.location.search.includes("code=")) {
@@ -515,6 +520,13 @@ export default function App() {
       if (authUnsubscribe) authUnsubscribe();
     };
   }, []);
+
+  // Background cloud progress sync whenever currentUser changes or mounts
+  useEffect(() => {
+    if (currentUser) {
+      syncUserProgress(currentUser).catch(() => {});
+    }
+  }, [currentUser?.id, currentUser?.email]);
 
   const handleLogout = async () => {
     if (isSupabaseConfigured && supabase) {

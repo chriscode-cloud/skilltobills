@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles, KeyRound, Arr
 import { BrandLogo } from "../BrandLogo";
 import { supabase, isSupabaseConfigured, sendMagicLink, verifyOtpCode } from "../../lib/supabase";
 import { setStoredUser, AuthUser, ADMIN_EMAILS, isEmailRateLimited, setEmailRateLimited } from "../../lib/auth";
+import { syncUserProgress } from "../../lib/progressSync";
 import { usePageMeta } from "../../hooks/usePageMeta";
 import { ImageSlider } from "@/components/ui/image-slider";
 
@@ -193,14 +194,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
 
       let isCompleted = isDesignatedAdmin ? true : false;
       let userTrack = "ai-virtual-influencers";
+      let existingProfile: any = null;
 
       if (isSupabaseConfigured && supabase) {
         try {
-          const { data: existingProfile } = await supabase
+          const { data } = await supabase
             .from("profiles")
             .select("*")
             .eq("email", cleanEmail)
             .maybeSingle();
+
+          existingProfile = data;
 
           if (existingProfile) {
             isCompleted = isDesignatedAdmin ? true : Boolean(existingProfile.onboarding_completed);
@@ -234,12 +238,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         }
       }
 
-      if (isDesignatedAdmin) {
-        userTrack = "ai-virtual-influencers";
+      let resolvedUserId: string | undefined = existingProfile?.id;
+      if (!resolvedUserId && isSupabaseConfigured && supabase) {
+        try {
+          const { data: suData } = await supabase.auth.getUser();
+          if (suData?.user?.id) {
+            resolvedUserId = suData.user.id;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!resolvedUserId) {
+        resolvedUserId = "usr-" + cleanEmail.replace(/[^a-z0-9]/g, "_");
       }
 
       const authUser: AuthUser = {
-        id: "usr-" + Math.random().toString(36).substring(2, 9),
+        id: resolvedUserId,
         email: cleanEmail,
         name: displayName.charAt(0).toUpperCase() + displayName.slice(1),
         role: userRole,
@@ -249,6 +265,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
       };
 
       setStoredUser(authUser);
+      await syncUserProgress(authUser);
       window.dispatchEvent(new CustomEvent("skill2bills_profile_updated", { detail: authUser }));
 
       const destination = getDestination(authUser);
@@ -389,8 +406,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
       // Fallback direct Google account sign-in
       const candidateEmail = email.trim().toLowerCase() || "christianaboagye06@gmail.com";
       const isDesignatedAdmin = ADMIN_EMAILS.includes(candidateEmail);
+
+      let resolvedId: string | undefined;
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data: suData } = await supabase.auth.getUser();
+          if (suData?.user?.id) resolvedId = suData.user.id;
+        } catch {
+          // ignore
+        }
+      }
+      if (!resolvedId) {
+        resolvedId = "goog-" + candidateEmail.replace(/[^a-z0-9]/g, "_");
+      }
+
       const authUser: AuthUser = {
-        id: "goog-" + Math.random().toString(36).substring(2, 9),
+        id: resolvedId,
         email: candidateEmail,
         name: candidateEmail.split("@")[0],
         role: isDesignatedAdmin ? "admin" : "student",
@@ -400,6 +431,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
       };
 
       setStoredUser(authUser);
+      await syncUserProgress(authUser);
       navigate(getDestination(authUser), { replace: true });
     } catch (err: any) {
       setErrorMessage(err?.message || "Google sign in failed. Please try again.");

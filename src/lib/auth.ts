@@ -101,8 +101,14 @@ export function setStoredUser(user: AuthUser): void {
 export function clearStoredUser(): void {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem("skill2bills_lms_progress_v2");
     sessionStorage.removeItem("skill2bills_redirect");
     window.dispatchEvent(new CustomEvent("skill2bills_auth_changed", { detail: null }));
+    window.dispatchEvent(
+      new CustomEvent("skill2bills_progress_synced", {
+        detail: { completedLessonIds: [], lastActiveLessonId: null, continueLessonId: "les-ai-1" },
+      })
+    );
   } catch {
     // ignore
   }

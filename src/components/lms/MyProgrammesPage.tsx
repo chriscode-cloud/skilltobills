@@ -5,6 +5,7 @@ import { AuthUser } from "../../lib/auth";
 import { getUserEnrolledCourses } from "./courseUtils";
 import { supabase, isSupabaseConfigured } from "../../lib/supabase";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { getUserProgressCache, syncUserProgress, EVENT_PROGRESS_SYNCED } from "../../lib/progressSync";
 
 interface MyProgrammesPageProps {
   currentUser?: AuthUser | null;
@@ -14,27 +15,28 @@ export const MyProgrammesPage: React.FC<MyProgrammesPageProps> = ({ currentUser 
   usePageMeta("My Learning Programmes", "Your enrolled track, active modules, and lesson completion status.");
 
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("skill2bills_lms_progress_v2");
-      if (saved) return JSON.parse(saved).completedLessonIds || [];
-    } catch {
-      // ignore
-    }
-    return [];
+    return getUserProgressCache().completedLessonIds;
   });
 
   useEffect(() => {
-    if (!currentUser || !isSupabaseConfigured || !supabase) return;
-    supabase
-      .from("user_progress")
-      .select("lesson_id")
-      .eq("user_id", currentUser.id)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          const ids = data.map((d: any) => d.lesson_id);
-          setCompletedLessonIds((prev) => Array.from(new Set([...prev, ...ids])));
-        }
-      });
+    let isMounted = true;
+    syncUserProgress(currentUser).then((res) => {
+      if (isMounted) {
+        setCompletedLessonIds(res.completedLessonIds);
+      }
+    });
+
+    const handleSynced = (e: any) => {
+      if (e.detail?.completedLessonIds) {
+        setCompletedLessonIds(e.detail.completedLessonIds);
+      }
+    };
+
+    window.addEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    };
   }, [currentUser]);
 
   const enrolledCourses = getUserEnrolledCourses(currentUser);

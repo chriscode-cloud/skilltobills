@@ -6,6 +6,7 @@ import { AuthUser } from "../../lib/auth";
 import { supabase, isSupabaseConfigured } from "../../lib/supabase";
 import { usePageMeta } from "../../hooks/usePageMeta";
 import { findCourseBySlugOrId } from "./courseUtils";
+import { getUserProgressCache, syncUserProgress, getContinueLesson, EVENT_PROGRESS_SYNCED } from "../../lib/progressSync";
 
 interface ProgrammeOverviewPageProps {
   currentUser?: AuthUser | null;
@@ -19,31 +20,39 @@ export const ProgrammeOverviewPage: React.FC<ProgrammeOverviewPageProps> = ({ cu
   usePageMeta(course.title, course.description);
 
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("skill2bills_lms_progress_v2");
-      if (saved) return JSON.parse(saved).completedLessonIds || [];
-    } catch {
-      // ignore
-    }
-    return [];
+    return getUserProgressCache().completedLessonIds;
+  });
+  const [lastActiveLessonId, setLastActiveLessonId] = useState<string | null>(() => {
+    return getUserProgressCache().lastActiveLessonId || null;
   });
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    supabase
-      .from("user_progress")
-      .select("lesson_id")
-      .eq("user_id", currentUser.id)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          const ids = data.map((d: any) => d.lesson_id);
-          setCompletedLessonIds((prev) => Array.from(new Set([...prev, ...ids])));
-        }
-      });
-  }, [currentUser.id]);
+    let isMounted = true;
+    syncUserProgress(currentUser).then((res) => {
+      if (isMounted) {
+        setCompletedLessonIds(res.completedLessonIds);
+        setLastActiveLessonId(res.lastActiveLessonId);
+      }
+    });
+
+    const handleSynced = (e: any) => {
+      if (e.detail?.completedLessonIds) {
+        setCompletedLessonIds(e.detail.completedLessonIds);
+      }
+      if (e.detail?.lastActiveLessonId) {
+        setLastActiveLessonId(e.detail.lastActiveLessonId);
+      }
+    };
+
+    window.addEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    };
+  }, [currentUser]);
 
   const allLessons = course.modules.flatMap((m) => m.lessons);
-  const nextLesson = allLessons.find((l) => !completedLessonIds.includes(l.id)) || allLessons[0];
+  const nextLesson = getContinueLesson(course.slug, completedLessonIds, lastActiveLessonId);
   const totalCompleted = allLessons.filter((l) => completedLessonIds.includes(l.id)).length;
   const totalPercentage = allLessons.length > 0 ? Math.round((totalCompleted / allLessons.length) * 100) : 0;
 

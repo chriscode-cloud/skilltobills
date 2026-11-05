@@ -5,6 +5,7 @@ import { LmsSidebar } from "../lms/LmsSidebar";
 import { LearnerFeedbackPopup } from "../feedback/LearnerFeedbackPopup";
 import { findCourseBySlugOrId } from "../lms/courseUtils";
 import { LMS_COURSES } from "../lms/lmsData";
+import { getUserProgressCache, EVENT_PROGRESS_SYNCED } from "../../lib/progressSync";
 
 interface AppShellProps {
   currentUser: AuthUser;
@@ -27,19 +28,30 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, onLogout }) => 
   const [showAutoFeedback, setShowAutoFeedback] = React.useState(false);
 
   React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem("skill2bills_lms_progress_v2");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const completedIds: string[] = parsed?.completedLessonIds || [];
+    const updateCounts = (ids?: string[]) => {
+      try {
+        const completedIds: string[] = ids || getUserProgressCache().completedLessonIds;
         setTotalCompletedCount(completedIds.length);
         const courseLessonIds = activeCourse.modules.flatMap((m) => m.lessons.map((l) => l.id));
         const count = completedIds.filter((id) => courseLessonIds.includes(id)).length;
         setTrackCompletedCount(count);
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
+    };
+
+    updateCounts();
+
+    const handleSynced = (e: any) => {
+      if (e.detail?.completedLessonIds) {
+        updateCounts(e.detail.completedLessonIds);
+      }
+    };
+
+    window.addEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    return () => {
+      window.removeEventListener(EVENT_PROGRESS_SYNCED, handleSynced);
+    };
   }, [location.pathname, activeCourse.id]);
 
   // Automated pop up in dashboard / syllabus if learner has completed 2+ lessons

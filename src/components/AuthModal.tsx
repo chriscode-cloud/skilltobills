@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle2, ArrowRight, ArrowLeft, Clock, AlertTriangle, Sparkles, GraduationCap, KeyRound, Mail } from "lucide-react";
 import { supabase, saveOnboardingData, isSupabaseConfigured, sendMagicLink, verifyOtpCode } from "../lib/supabase";
 import { setStoredUser, AuthUser, ADMIN_EMAILS, isEmailRateLimited, setEmailRateLimited } from "../lib/auth";
+import { syncUserProgress } from "../lib/progressSync";
 import { ImageSlider } from "@/components/ui/image-slider";
 import { BrandLogo } from "./BrandLogo";
 
@@ -110,7 +111,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const displayName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
 
     const user: AuthUser = {
-      id: "usr-" + Math.random().toString(36).substring(2, 9),
+      id: "usr-" + userEmail.replace(/[^a-z0-9]/g, "_"),
       email: userEmail,
       name: displayName,
       role: isDesignatedAdmin ? "admin" : "student",
@@ -123,6 +124,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     };
 
     setStoredUser(user);
+    syncUserProgress(user).catch(() => {});
 
     if (onAuthSuccess) {
       onAuthSuccess(user);
