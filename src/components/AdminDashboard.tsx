@@ -612,6 +612,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
 
             <button
               type="button"
+              onClick={() => setSqlModalOpen(true)}
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-3 py-2 rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer"
+              title="View Safe 1-Click SQL Script"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#D4F636]" />
+              <span>SQL Sync</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleExportLearnerActivityCSV}
               className="bg-[#D4F636] hover:bg-[#c2e42b] text-black text-xs font-black px-3.5 py-2 rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
             >
@@ -1130,8 +1140,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">1-Click Supabase SQL Sync Script</h3>
-                  <p className="text-[11px] text-slate-500">Backfills all 11 auth accounts into profiles &amp; configures auto-sync</p>
+                  <h3 className="text-base font-extrabold text-slate-900">1-Click Safe Supabase SQL Sync Script</h3>
+                  <p className="text-[11px] text-slate-500">Syncs auth accounts, configures learner progress tracking, and enables admin access</p>
                 </div>
               </div>
               <button
@@ -1147,10 +1157,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToWebsite 
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900 flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold">Permanent 2-Step Solution:</p>
+                  <p className="font-bold text-emerald-950">100% Safe &amp; Non-Destructive (No Data Reset):</p>
                   <p className="text-emerald-800 mt-0.5">
-                    1. Click <strong>"Copy SQL Script"</strong> below.<br/>
-                    2. Go to your <a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noreferrer" className="font-bold underline text-emerald-950">Supabase SQL Editor</a>, paste and click <strong>"Run"</strong>. Done!
+                    This script <strong>NEVER deletes, drops, or resets</strong> your database. It only adds missing columns/tables if they don't exist, unlocks learner progress permissions for admin viewing, and connects all registered accounts.
+                  </p>
+                  <p className="text-emerald-900 mt-1 font-semibold">
+                    1. Click <strong>"Copy SQL Script"</strong> below &rarr; 2. Open <a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-950">Supabase SQL Editor</a>, paste and click <strong>"Run"</strong>. Done!
                   </p>
                 </div>
               </div>

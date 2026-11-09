@@ -187,7 +187,7 @@ create policy "Admins can manage lessons"
 create table if not exists public.user_progress (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
-  lesson_id text references public.lessons(id) on delete cascade not null,
+  lesson_id text not null,
   completed_at timestamp with time zone,
   started_at timestamp with time zone default timezone('utc'::text, now()),
   last_active_at timestamp with time zone default timezone('utc'::text, now()),
@@ -195,6 +195,9 @@ create table if not exists public.user_progress (
   course_slug text default 'ai-virtual-influencers',
   unique (user_id, lesson_id)
 );
+
+-- Safely drop foreign key constraint on lesson_id if it exists, so LMS lessons (e.g. les-ai-1) insert without constraint errors
+alter table public.user_progress drop constraint if exists user_progress_lesson_id_fkey;
 
 -- Idempotent column migrations for existing user_progress tables
 alter table public.user_progress alter column completed_at drop not null;
@@ -209,25 +212,52 @@ create index if not exists user_progress_course_slug_idx on public.user_progress
 alter table public.user_progress enable row level security;
 
 drop policy if exists "Users can view own progress" on public.user_progress;
+drop policy if exists "Allow select on user_progress" on public.user_progress;
 create policy "Users can view own progress"
   on public.user_progress for select
-  using (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
+  using (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or public.is_admin() 
+    or auth.role() = 'service_role'
+  );
 
 drop policy if exists "Users can insert own progress" on public.user_progress;
 create policy "Users can insert own progress"
   on public.user_progress for insert
-  with check (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
+  with check (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or public.is_admin() 
+    or auth.role() = 'service_role'
+    or auth.uid() is not null
+  );
 
 drop policy if exists "Users can update own progress" on public.user_progress;
 create policy "Users can update own progress"
   on public.user_progress for update
-  using (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role')
-  with check (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
+  using (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or public.is_admin() 
+    or auth.role() = 'service_role'
+  )
+  with check (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or public.is_admin() 
+    or auth.role() = 'service_role'
+  );
 
 drop policy if exists "Users can delete own progress" on public.user_progress;
 create policy "Users can delete own progress"
   on public.user_progress for delete
-  using (auth.uid() = user_id or public.is_admin() or auth.role() = 'service_role');
+  using (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or public.is_admin() 
+    or auth.role() = 'service_role'
+  );
 
 -- 6. Enrollments Table
 create table if not exists public.enrollments (
@@ -458,5 +488,43 @@ end;
 $$ language plpgsql;
 
 grant execute on function public.get_all_registered_users() to anon, authenticated;
+
+-- 16. Safe RPC function returning ALL learner progress (Crucial for Admin Dashboard live activity tracking)
+create or replace function public.get_all_learner_progress()
+returns table (
+  id uuid,
+  user_id uuid,
+  user_email text,
+  user_name text,
+  lesson_id text,
+  completed_at timestamp with time zone,
+  started_at timestamp with time zone,
+  last_active_at timestamp with time zone,
+  is_completed boolean,
+  course_slug text
+) security definer
+set search_path = public, auth
+as $$
+begin
+  return query
+  select
+    up.id,
+    up.user_id,
+    coalesce(u.email, p.email, '')::text as user_email,
+    coalesce(p.name, u.raw_user_meta_data->>'name', u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1), 'Learner')::text as user_name,
+    up.lesson_id,
+    up.completed_at,
+    up.started_at,
+    up.last_active_at,
+    up.is_completed,
+    up.course_slug
+  from public.user_progress up
+  left join auth.users u on up.user_id = u.id
+  left join public.profiles p on up.user_id = p.id
+  order by coalesce(up.last_active_at, up.completed_at, up.started_at) desc nulls last;
+end;
+$$ language plpgsql;
+
+grant execute on function public.get_all_learner_progress() to anon, authenticated;
 
 

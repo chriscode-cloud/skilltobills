@@ -288,9 +288,14 @@ export async function recordLessonOpen(
             course_slug: courseSlug,
           };
 
-          const { error: insertErr } = await supabase
+          let { error: insertErr } = await supabase
             .from("user_progress")
             .insert(insertPayload);
+
+          if (insertErr && (insertErr as any)?.message?.includes("course_slug")) {
+            const { course_slug: _, ...leanPayload } = insertPayload;
+            insertErr = (await supabase.from("user_progress").insert(leanPayload)).error;
+          }
 
           if (insertErr) {
             const adminClient = getSupabaseAdminClient();
@@ -431,9 +436,14 @@ export async function recordLessonComplete(
           course_slug: courseSlug,
         };
 
-        const { error } = await supabase
+        let { error } = await supabase
           .from("user_progress")
           .upsert(upsertPayload, { onConflict: "user_id,lesson_id" });
+
+        if (error && (error as any)?.message?.includes("course_slug")) {
+          const { course_slug: _, ...leanPayload } = upsertPayload;
+          error = (await supabase.from("user_progress").upsert(leanPayload, { onConflict: "user_id,lesson_id" })).error;
+        }
 
         if (error) {
           const adminClient = getSupabaseAdminClient();
@@ -644,7 +654,23 @@ export async function getAllLearnerActivity(
   const seenRecordKeys = new Set<string>();
 
   if (isSupabaseConfigured && supabase) {
-    // A. Check if Service Role admin client is available
+    // A. First try the safe RPC function (bypasses RLS issues for admin and includes email/name)
+    try {
+      const { data: rpcRows, error: rpcErr } = await supabase.rpc("get_all_learner_progress");
+      if (!rpcErr && rpcRows && Array.isArray(rpcRows)) {
+        rpcRows.forEach((r: any) => {
+          const key = `${r.user_id}-${r.lesson_id}`;
+          if (!seenRecordKeys.has(key)) {
+            seenRecordKeys.add(key);
+            progressRecords.push(r);
+          }
+        });
+      }
+    } catch {
+      // RPC not yet configured in Supabase, fallback to direct queries
+    }
+
+    // B. Check if Service Role admin client is available
     const adminClient = getSupabaseAdminClient();
     if (adminClient) {
       try {
@@ -665,7 +691,7 @@ export async function getAllLearnerActivity(
       }
     }
 
-    // B. Check standard client query (merge any records visible to active session)
+    // C. Check standard client query (merge any records visible to active session)
     try {
       const { data: userRows, error } = await supabase
         .from("user_progress")

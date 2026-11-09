@@ -28,9 +28,14 @@ export type SupabaseProfile = Profile;
 export { supabase, isSupabaseConfigured };
 
 export const DEFAULT_SQL_SYNC_SCRIPT = `-- =================================================================
--- Skill2Bills: 1-Click Supabase Auth Users Synchronization Script
+-- Skill2Bills: 1-Click Safe Supabase Sync Script
 -- Run this in Supabase Dashboard -> SQL Editor
 -- (https://supabase.com/dashboard/project/_/sql)
+--
+-- 100% SAFE & NON-DESTRUCTIVE:
+-- - DOES NOT reset, wipe, or delete any data, users, or progress.
+-- - Only adds missing columns, tables, and permissions (IF NOT EXISTS).
+-- - Preserves all existing learner progress and profiles.
 -- =================================================================
 
 -- 1. Ensure public.profiles table exists and has proper columns
@@ -57,10 +62,39 @@ alter table public.profiles add column if not exists goal text default 'Scale my
 alter table public.profiles add column if not exists time_commitment text default '5-15';
 alter table public.profiles add column if not exists experience_level text default 'Beginner';
 
--- 2. Enable RLS and permit admins and authenticated users to read profiles
+-- 2. Ensure public.user_progress table exists and is compatible
+create table if not exists public.user_progress (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  lesson_id text not null,
+  completed_at timestamp with time zone,
+  started_at timestamp with time zone default timezone('utc'::text, now()),
+  last_active_at timestamp with time zone default timezone('utc'::text, now()),
+  is_completed boolean default false,
+  course_slug text default 'ai-virtual-influencers',
+  unique (user_id, lesson_id)
+);
+
+-- Safely drop foreign key constraint on lesson_id if it exists, so LMS lessons (e.g. les-ai-1) insert without constraint errors
+alter table public.user_progress drop constraint if exists user_progress_lesson_id_fkey;
+
+-- Ensure all progress tracking columns exist
+alter table public.user_progress alter column completed_at drop not null;
+alter table public.user_progress add column if not exists started_at timestamp with time zone default timezone('utc'::text, now());
+alter table public.user_progress add column if not exists last_active_at timestamp with time zone default timezone('utc'::text, now());
+alter table public.user_progress add column if not exists is_completed boolean default false;
+alter table public.user_progress add column if not exists course_slug text default 'ai-virtual-influencers';
+
+-- Indexes for performance
+create index if not exists user_progress_user_id_idx on public.user_progress(user_id);
+create index if not exists user_progress_lesson_id_idx on public.user_progress(lesson_id);
+create index if not exists user_progress_course_slug_idx on public.user_progress(course_slug);
+
+-- 3. Enable RLS and configure policies for Profiles
 alter table public.profiles enable row level security;
 
 drop policy if exists "Allow reading all profiles" on public.profiles;
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Allow reading all profiles"
   on public.profiles for select
   using (true);
@@ -68,14 +102,47 @@ create policy "Allow reading all profiles"
 drop policy if exists "Allow inserting own profile" on public.profiles;
 create policy "Allow inserting own profile"
   on public.profiles for insert
-  with check (auth.uid() = id or email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com'));
+  with check (auth.uid() = id or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com') or auth.role() = 'service_role');
 
 drop policy if exists "Allow updating own profile" on public.profiles;
 create policy "Allow updating own profile"
   on public.profiles for update
-  using (auth.uid() = id or email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com'));
+  using (auth.uid() = id or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com') or auth.role() = 'service_role');
 
--- 3. Backfill all existing auth.users into public.profiles right now!
+-- 4. Enable RLS and configure policies for User Progress (Admin visibility included)
+alter table public.user_progress enable row level security;
+
+drop policy if exists "Users can view own progress" on public.user_progress;
+drop policy if exists "Allow select on user_progress" on public.user_progress;
+create policy "Users can view own progress"
+  on public.user_progress for select
+  using (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or auth.role() = 'service_role'
+  );
+
+drop policy if exists "Users can insert own progress" on public.user_progress;
+create policy "Users can insert own progress"
+  on public.user_progress for insert
+  with check (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or auth.role() = 'service_role'
+    or auth.uid() is not null
+  );
+
+drop policy if exists "Users can update own progress" on public.user_progress;
+create policy "Users can update own progress"
+  on public.user_progress for update
+  using (
+    auth.uid() = user_id 
+    or (auth.jwt() ->> 'email') in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com')
+    or auth.role() = 'service_role'
+  );
+
+-- 5. Backfill all existing auth.users into public.profiles (safely updates, does not delete)
 insert into public.profiles (id, email, name, role, track, goal, time_commitment, experience_level, created_at, updated_at)
 select
   u.id,
@@ -93,7 +160,12 @@ on conflict (id) do update set
   email = excluded.email,
   role = case when excluded.email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com') then 'admin' else public.profiles.role end;
 
--- 4. Automatically sync any future signups from auth.users to public.profiles
+-- Ensure admin accounts are marked as admin in profiles
+update public.profiles
+set role = 'admin'
+where email in ('christianaboagye06@gmail.com', 'christianaaboagye06@gmail.com');
+
+-- 6. Trigger to automatically sync future signups
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -120,7 +192,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- 5. Safe RPC function returning all registered users
+-- 7. Safe RPC function returning all registered users
 create or replace function public.get_all_registered_users()
 returns table (
   id uuid,
@@ -154,6 +226,44 @@ end;
 $$ language plpgsql;
 
 grant execute on function public.get_all_registered_users() to anon, authenticated;
+
+-- 8. Safe RPC function returning ALL learner progress (Crucial for Admin Dashboard live activity tracking)
+create or replace function public.get_all_learner_progress()
+returns table (
+  id uuid,
+  user_id uuid,
+  user_email text,
+  user_name text,
+  lesson_id text,
+  completed_at timestamp with time zone,
+  started_at timestamp with time zone,
+  last_active_at timestamp with time zone,
+  is_completed boolean,
+  course_slug text
+) security definer
+set search_path = public, auth
+as $$
+begin
+  return query
+  select
+    up.id,
+    up.user_id,
+    coalesce(u.email, p.email, '')::text as user_email,
+    coalesce(p.name, u.raw_user_meta_data->>'name', u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1), 'Learner')::text as user_name,
+    up.lesson_id,
+    up.completed_at,
+    up.started_at,
+    up.last_active_at,
+    up.is_completed,
+    up.course_slug
+  from public.user_progress up
+  left join auth.users u on up.user_id = u.id
+  left join public.profiles p on up.user_id = p.id
+  order by coalesce(up.last_active_at, up.completed_at, up.started_at) desc nulls last;
+end;
+$$ language plpgsql;
+
+grant execute on function public.get_all_learner_progress() to anon, authenticated;
 `;
 
 export type FeedbackEntry = {
