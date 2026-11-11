@@ -1,3 +1,4 @@
+import { clearCustomServiceRoleKey } from "./superbase/client";
 import { supabase, isSupabaseConfigured, Profile } from "./supabase";
 
 export interface AuthUser {
@@ -99,6 +100,7 @@ export function setStoredUser(user: AuthUser): void {
  * Clear cached user state (log out)
  */
 export function clearStoredUser(): void {
+  clearCustomServiceRoleKey();
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem("skill2bills_lms_progress_v2");
