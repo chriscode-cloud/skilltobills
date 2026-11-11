@@ -1,4 +1,4 @@
-import { supabase } from "./client";
+import { supabase, clearCustomServiceRoleKey } from "./client";
 import { Profile } from "./supabase";
 
 export async function signUp(email: string, password: string) {
@@ -87,6 +87,7 @@ export async function verifyOtpCode(
 }
 
 export async function signOut() {
+  clearCustomServiceRoleKey();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
