@@ -29,14 +29,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTrackById, onBlogClick }
               </span>
             </a>
             <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm">
-              <a
-                href="/admin"
-                className="hover:text-slate-300 transition-colors cursor-pointer"
-                title="Admin"
-              >
-                Practical
-              </a>{" "}
-              education for the 2026 creator economy. Learn what actually pays.
+              Practical education for the 2026 creator economy. Learn what actually pays.
             </p>
           </div>
 
