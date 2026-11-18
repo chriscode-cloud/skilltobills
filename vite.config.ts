@@ -6,6 +6,13 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // Only public application settings may enter browser modules, including in dev.
+    envPrefix: [
+      'VITE_SUPABASE_URL',
+      'VITE_SUPABASE_ANON_KEY',
+      'VITE_SUPABASE_PUBLISHABLE_KEY',
+      'VITE_DISCORD_INVITE_URL',
+    ],
     define: {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
         process.env.VITE_SUPABASE_URL &&
