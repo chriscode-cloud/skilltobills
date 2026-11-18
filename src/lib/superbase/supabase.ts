@@ -348,53 +348,6 @@ export async function saveOnboardingData(
 }
 
 /**
- * Fetch all registered users directly from Supabase Auth via Service Role key
- */
-export async function fetchSupabaseAuthUsers(serviceRoleKey?: string): Promise<{ users: Profile[]; error?: string }> {
-  try {
-    const adminClient = getSupabaseAdminClient(serviceRoleKey);
-    if (!adminClient) {
-      return { users: [], error: "No service role key configured. Enter your service_role secret key to query auth.users." };
-    }
-
-    const { data, error } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (error) {
-      return { users: [], error: error.message };
-    }
-
-    if (!data?.users || !Array.isArray(data.users)) {
-      return { users: [] };
-    }
-
-    const profiles: Profile[] = data.users.map((u: any) => {
-      const email = (u.email || "").toLowerCase().trim();
-      const isAdmin = ["christianaboagye06@gmail.com", "christianaaboagye06@gmail.com"].includes(email);
-      const name = u.user_metadata?.name || u.user_metadata?.full_name || email.split("@")[0] || "Learner";
-
-      return {
-        id: u.id,
-        email,
-        name,
-        role: isAdmin ? "admin" : "student",
-        track: "AI & Virtual Influencers",
-        goal: "Scale personal brand & monetize",
-        time_commitment: "5-15",
-        experience_level: "Beginner",
-        status: u.email_confirmed_at ? "Confirmed" : "Verified",
-        source: "Supabase Auth",
-        created_at: u.created_at || new Date().toISOString(),
-        updated_at: u.updated_at,
-        last_sign_in_at: u.last_sign_in_at,
-      };
-    });
-
-    return { users: profiles };
-  } catch (err: any) {
-    return { users: [], error: err?.message || String(err) };
-  }
-}
-
-/**
  * Batch sync auth users into public.profiles table
  */
 export async function syncAuthUsersToProfiles(users: Profile[]): Promise<{ count: number; error?: string }> {
