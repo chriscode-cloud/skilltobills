@@ -43,8 +43,8 @@ security definer
 set search_path = public, auth
 as $$
 begin
-  -- Exemption for direct SQL editor operations and service_role
-  if current_user in ('postgres', 'supabase_admin') or coalesce(auth.role(), '') = 'service_role' then
+  -- SECURITY DEFINER changes current_user to the owner; use request identity only.
+  if coalesce(auth.role(), '') = 'service_role' then
     return true;
   end if;
 
@@ -63,11 +63,12 @@ $$;
 create or replace function public.protect_profile_role()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public, auth
 as $$
 begin
-  -- Allow updates from Supabase SQL Editor / database superusers / service role or active admins
+  -- As SECURITY INVOKER, current_user identifies the caller, not the function owner.
+  -- Preserve direct SQL Editor, service role, and active admin role management.
   if current_user in ('postgres', 'supabase_admin') or coalesce(auth.role(), '') = 'service_role' or public.is_admin() then
     return new;
   end if;
