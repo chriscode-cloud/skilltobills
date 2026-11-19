@@ -30,7 +30,7 @@ interface LearnerFeedbackPopupProps {
 
 const TYPEFORM_ID = "01M6HRXRE7VBRM0DCCEAC5SXWB";
 const TYPEFORM_URL = `https://form.typeform.com/to/${TYPEFORM_ID}`;
-const SCRIPT_SRC = "//embed.typeform.com/next/embed.js";
+const SCRIPT_SRC = "https://embed.typeform.com/next/embed.js";
 
 export const LearnerFeedbackPopup: React.FC<LearnerFeedbackPopupProps> = ({
   isOpen,
